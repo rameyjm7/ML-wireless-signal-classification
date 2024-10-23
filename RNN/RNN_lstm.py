@@ -162,7 +162,7 @@ class ModulationLSTMClassifier:
 # Usage
 data_path = '../RML2016.10a_dict.pkl'
 model_path = 'rnn_ADAM_LR_0p0001.h5'  # Path to save and load the model
-stats_path = 'model_stats.json'  # Path to save and load model stats
+stats_path = f'{model_path}_stats.json'  # Path to save and load model stats
 
 # Initialize the classifier
 classifier = ModulationLSTMClassifier(data_path, model_path, stats_path)
