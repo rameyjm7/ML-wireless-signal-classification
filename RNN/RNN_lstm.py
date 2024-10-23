@@ -7,16 +7,19 @@ ctypes.cdll.LoadLibrary("libgomp.so.1")
 import pickle
 import numpy as np
 import tensorflow as tf
-from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.optimizers import Adam, SGD
 from tensorflow.keras.models import Sequential, load_model
 from tensorflow.keras.layers import LSTM, Dense, Dropout
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 
-import torch
-torch.cuda.is_available()
-ret = torch.cuda.get_device_properties(0).name
-print(ret)
+try:
+    import torch
+    torch.cuda.is_available()
+    ret = torch.cuda.get_device_properties(0).name
+    print(ret)
+except:
+    pass
 
 class ModulationLSTMClassifier:
     def __init__(self, data_path, model_path="saved_model.h5", stats_path="model_stats.json"):
@@ -158,6 +161,18 @@ class ModulationLSTMClassifier:
         predictions = self.model.predict(X)
         predicted_labels = self.label_encoder.inverse_transform(np.argmax(predictions, axis=1))
         return predicted_labels
+    
+    def change_optimizer(self, new_optimizer):
+        """
+        Changes the optimizer of the existing model and recompiles it.
+        """
+        self.model.compile(optimizer=new_optimizer, loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+        print("Optimizer updated and model recompiled.")
+    
+    def get_optimizers(self):
+        optimizers = [Adam(learning_rate=0.0001),
+                      SGD(learning_rate=0.01, momentum=0.9)]
+        return optimizers
 
 # Usage
 data_path = '../RML2016.10a_dict.pkl'
