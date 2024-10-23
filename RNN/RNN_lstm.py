@@ -2,8 +2,8 @@ import os
 import ctypes
 import json
 from datetime import datetime
+os.environ['LD_PRELOAD'] = '/home/dev/python/lib/python3.8/site-packages/sklearn/__check_build/../../scikit_learn.libs/libgomp-d22c30c5.so.1.0.0'
 ctypes.cdll.LoadLibrary("libgomp.so.1")
-# os.environ['LD_PRELOAD'] = '/home/dev/python/lib/python3.8/site-packages/sklearn/__check_build/../../scikit_learn.libs/libgomp-d22c30c5.so.1.0.0'
 import pickle
 import numpy as np
 import tensorflow as tf
@@ -12,6 +12,9 @@ from tensorflow.keras.models import Sequential, load_model
 from tensorflow.keras.layers import LSTM, Dense, Dropout
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
+
+from tensorflow.keras.callbacks import ReduceLROnPlateau
+from tensorflow.keras.callbacks import EarlyStopping
 
 try:
     import torch
@@ -127,7 +130,13 @@ class ModulationLSTMClassifier:
         Trains the LSTM model and saves the model after training.
         Updates and saves model statistics.
         """
-        history = self.model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size, validation_data=(X_test, y_test))
+        # the Learning Rate scheduler will change the learning rate when things plateau
+        lr_scheduler = ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=3, min_lr=1e-6)
+
+        # stop early if the accuracy is not improving 
+        early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
+        
+        history = self.model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size, validation_data=(X_test, y_test), callbacks=[lr_scheduler,early_stopping])
 
         # Save the model after training
         self.model.save(self.model_path)
@@ -192,6 +201,7 @@ X_train, X_test, y_train, y_test = classifier.prepare_data()
 input_shape = (X_train.shape[1], X_train.shape[2])  # Time steps and features
 num_classes = len(np.unique(y_train))  # Number of unique modulation types
 classifier.build_model(input_shape, num_classes)
+# classifier.change_optimizer(SGD(learning_rate=0.01, momentum=0.9))
 
 # Train the model
 classifier.train(X_train, y_train, X_test, y_test, epochs=20, batch_size=64)
