@@ -1,5 +1,7 @@
 import os
 import ctypes
+import json
+from datetime import datetime
 ctypes.cdll.LoadLibrary("libgomp.so.1")
 # os.environ['LD_PRELOAD'] = '/home/dev/python/lib/python3.8/site-packages/sklearn/__check_build/../../scikit_learn.libs/libgomp-d22c30c5.so.1.0.0'
 import pickle
@@ -17,15 +19,45 @@ ret = torch.cuda.get_device_properties(0).name
 print(ret)
 
 class ModulationLSTMClassifier:
-    def __init__(self, data_path, model_path="saved_model.h5"):
+    def __init__(self, data_path, model_path="saved_model.h5", stats_path="model_stats.json"):
         """
-        Initializes the classifier with the data path and optional model path.
+        Initializes the classifier with the data path, model path, and optional stats path.
         """
         self.data_path = data_path
         self.model_path = model_path
+        self.stats_path = stats_path
         self.data = None
         self.label_encoder = None
         self.model = None
+        self.stats = {
+            "date_created": None,
+            "epochs_trained": 0,
+            "best_accuracy": 0,
+            "current_accuracy": 0,
+            "last_trained": None
+        }
+        self.load_stats()
+
+    def load_stats(self):
+        """
+        Loads the model statistics from a JSON file if it exists.
+        """
+        if os.path.exists(self.stats_path):
+            with open(self.stats_path, 'r') as f:
+                self.stats = json.load(f)
+            print(f"Loaded model stats from {self.stats_path}")
+        else:
+            # Initialize the stats with the current date
+            self.stats["date_created"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            self.save_stats()
+
+    def save_stats(self):
+        """
+        Saves the model statistics to a JSON file.
+        """
+        with open(self.stats_path, 'w') as f:
+            json.dump(self.stats, f, indent=4)
+        print(f"Saved model stats to {self.stats_path}")
 
     def load_data(self):
         """
@@ -90,12 +122,24 @@ class ModulationLSTMClassifier:
     def train(self, X_train, y_train, X_test, y_test, epochs=20, batch_size=64):
         """
         Trains the LSTM model and saves the model after training.
+        Updates and saves model statistics.
         """
         history = self.model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size, validation_data=(X_test, y_test))
-        
+
         # Save the model after training
         self.model.save(self.model_path)
         print(f"Model saved to {self.model_path}")
+
+        # Update stats
+        self.stats["epochs_trained"] += epochs
+        self.stats["last_trained"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        current_accuracy = max(history.history['val_accuracy'])
+        self.stats["current_accuracy"] = current_accuracy
+
+        if current_accuracy > self.stats["best_accuracy"]:
+            self.stats["best_accuracy"] = current_accuracy
+
+        self.save_stats()
 
         return history
 
@@ -105,6 +149,7 @@ class ModulationLSTMClassifier:
         """
         test_loss, test_acc = self.model.evaluate(X_test, y_test)
         print(f"Test Accuracy: {test_acc * 100:.2f}%")
+        return test_acc
 
     def predict(self, X):
         """
@@ -115,11 +160,12 @@ class ModulationLSTMClassifier:
         return predicted_labels
 
 # Usage
-data_path = 'RML2016.10a_dict.pkl'
+data_path = '../RML2016.10a_dict.pkl'
 model_path = 'rnn_ADAM_LR_0p0001.h5'  # Path to save and load the model
+stats_path = 'model_stats.json'  # Path to save and load model stats
 
 # Initialize the classifier
-classifier = ModulationLSTMClassifier(data_path, model_path)
+classifier = ModulationLSTMClassifier(data_path, model_path, stats_path)
 
 # Load the dataset
 classifier.load_data()
