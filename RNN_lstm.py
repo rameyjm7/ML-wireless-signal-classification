@@ -1,12 +1,12 @@
 import os
 import ctypes
 ctypes.cdll.LoadLibrary("libgomp.so.1")
-os.environ['LD_PRELOAD'] = '/home/dev/python/lib/python3.8/site-packages/sklearn/__check_build/../../scikit_learn.libs/libgomp-d22c30c5.so.1.0.0'
+# os.environ['LD_PRELOAD'] = '/home/dev/python/lib/python3.8/site-packages/sklearn/__check_build/../../scikit_learn.libs/libgomp-d22c30c5.so.1.0.0'
 import pickle
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.models import Sequential
+from tensorflow.keras.models import Sequential, load_model
 from tensorflow.keras.layers import LSTM, Dense, Dropout
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
@@ -17,11 +17,12 @@ ret = torch.cuda.get_device_properties(0).name
 print(ret)
 
 class ModulationLSTMClassifier:
-    def __init__(self, data_path):
+    def __init__(self, data_path, model_path="saved_model.h5"):
         """
-        Initializes the classifier with the data path.
+        Initializes the classifier with the data path and optional model path.
         """
         self.data_path = data_path
+        self.model_path = model_path
         self.data = None
         self.label_encoder = None
         self.model = None
@@ -65,27 +66,37 @@ class ModulationLSTMClassifier:
 
     def build_model(self, input_shape, num_classes):
         """
-        Builds and compiles the LSTM model.
+        Builds and compiles the LSTM model if it doesn't exist. 
+        If a saved model exists, it will load it.
         """
-        self.model = Sequential()
-        self.model.add(LSTM(128, input_shape=input_shape, return_sequences=True))
-        self.model.add(Dropout(0.2))
-        self.model.add(LSTM(128, return_sequences=False))
-        self.model.add(Dropout(0.2))
-        self.model.add(Dense(128, activation='relu'))
-        self.model.add(Dropout(0.2))
-        self.model.add(Dense(num_classes, activation='softmax'))  # Output layer for classification
+        if os.path.exists(self.model_path):
+            print(f"Loading existing model from {self.model_path}")
+            self.model = load_model(self.model_path)
+        else:
+            print(f"Building new model")
+            self.model = Sequential()
+            self.model.add(LSTM(128, input_shape=input_shape, return_sequences=True))
+            self.model.add(Dropout(0.2))
+            self.model.add(LSTM(128, return_sequences=False))
+            self.model.add(Dropout(0.2))
+            self.model.add(Dense(128, activation='relu'))
+            self.model.add(Dropout(0.2))
+            self.model.add(Dense(num_classes, activation='softmax'))  # Output layer for classification
 
-
-        optimizer = Adam(learning_rate=0.0001)  # Lower learning rate
-        # Compile the model
-        self.model.compile(loss='sparse_categorical_crossentropy', optimizer=optimizer, metrics=['accuracy'])
+            optimizer = Adam(learning_rate=0.0001)  # Lower learning rate
+            # Compile the model
+            self.model.compile(loss='sparse_categorical_crossentropy', optimizer=optimizer, metrics=['accuracy'])
 
     def train(self, X_train, y_train, X_test, y_test, epochs=20, batch_size=64):
         """
-        Trains the LSTM model.
+        Trains the LSTM model and saves the model after training.
         """
         history = self.model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size, validation_data=(X_test, y_test))
+        
+        # Save the model after training
+        self.model.save(self.model_path)
+        print(f"Model saved to {self.model_path}")
+
         return history
 
     def evaluate(self, X_test, y_test):
@@ -104,10 +115,11 @@ class ModulationLSTMClassifier:
         return predicted_labels
 
 # Usage
-data_path = 'rfml/RML2016.10a_dict.pkl'
+data_path = 'RML2016.10a_dict.pkl'
+model_path = 'rnn_ADAM_LR_0p0001.h5'  # Path to save and load the model
 
 # Initialize the classifier
-classifier = ModulationLSTMClassifier(data_path)
+classifier = ModulationLSTMClassifier(data_path, model_path)
 
 # Load the dataset
 classifier.load_data()
@@ -115,7 +127,7 @@ classifier.load_data()
 # Prepare the data
 X_train, X_test, y_train, y_test = classifier.prepare_data()
 
-# Build the LSTM model
+# Build the LSTM model (load if it exists)
 input_shape = (X_train.shape[1], X_train.shape[2])  # Time steps and features
 num_classes = len(np.unique(y_train))  # Number of unique modulation types
 classifier.build_model(input_shape, num_classes)
