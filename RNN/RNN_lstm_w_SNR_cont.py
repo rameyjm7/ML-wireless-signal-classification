@@ -10,6 +10,8 @@ import tensorflow as tf
 from tensorflow.keras.optimizers import Adam, SGD
 from tensorflow.keras.models import Sequential, load_model
 from tensorflow.keras.layers import LSTM, Dense, Dropout
+
+
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 
@@ -101,7 +103,7 @@ class ModulationLSTMClassifier:
             augmentation_params = {
                 "noise_level": 0.01,
                 "scale_range": (0.9, 1.1),
-                "shift_range": (-0.1, 0.1)
+                "shift_range": (0, 0) # (-0.1, 0.1)
             }
 
         noise_level = augmentation_params["noise_level"]
@@ -177,7 +179,7 @@ class ModulationLSTMClassifier:
             print(f"New best accuracy: {current_accuracy}. Saving model...")
             self.stats["best_accuracy"] = current_accuracy
             # Save the model if the accuracy improved
-            self.model.save(self.model_path)
+            self.save_model()
         else:
             print(f"Current accuracy {current_accuracy} did not improve from best accuracy {self.stats['best_accuracy']}. Skipping model save.")
 
@@ -185,6 +187,11 @@ class ModulationLSTMClassifier:
         self.save_stats()
 
         return history
+    
+    def save_model(self):
+        mpath = f'{self.model_path}'
+        self.model.save(mpath, save_format='keras')
+        print(f"Model saved to {mpath}")
     
     def train_variable(self, X_train, y_train, X_test, y_test):
         try:
@@ -203,17 +210,12 @@ class ModulationLSTMClassifier:
             self.evaluate(X_test, y_test)
             self.save_stats()
     
-    def train_continuously(self, X_train, y_train, X_test, y_test, batch_size=64, augment_after_epochs=5, use_clr=False, clr_step_size=10):
+    def train_continuously(self, X_train, y_train, X_test, y_test, batch_size=64, use_clr=False, clr_step_size=10):
         try:
             epoch = 1
             while True:
                 print(f"\nStarting epoch {epoch}")
                 self.train(X_train, y_train, X_test, y_test, epochs=1, batch_size=batch_size, use_clr=use_clr, clr_step_size=clr_step_size)
-
-                # Augment data after every `augment_after_epochs` number of epochs
-                if epoch % augment_after_epochs == 0:
-                    print(f"Augmenting data at epoch {epoch}")
-                    X_train = self.augment_data(X_train)
 
                 epoch += 1
         except KeyboardInterrupt:
@@ -238,7 +240,7 @@ class ModulationLSTMClassifier:
 
 # Usage
 data_path = '../RML2016.10a_dict.pkl'
-model_path = 'rnn_lstm_w_SNR.h5'  # Path to save and load the model
+model_path = 'rnn_lstm_w_SNR.keras'  # Path to save and load the model
 stats_path = f'{model_path}_stats.json'  # Path to save and load model stats
 
 # Initialize the classifier
@@ -254,12 +256,11 @@ X_train, X_test, y_train, y_test = classifier.prepare_data()
 input_shape = (X_train.shape[1], X_train.shape[2])  # Time steps and features (with SNR as additional feature)
 num_classes = len(np.unique(y_train))  # Number of unique modulation types
 classifier.build_model(input_shape, num_classes)
-
 # Set the learning rate
-classifier.set_learning_rate(1e-4)
+classifier.set_learning_rate(0.1e-6)
 
-# Train continuously with data augmentation after every 5 epochs
-classifier.train_continuously(X_train, y_train, X_test, y_test, batch_size=64, augment_after_epochs=5, use_clr=False, clr_step_size=10)
+classifier.train_continuously(X_train, y_train, X_test, y_test, batch_size=64, use_clr=False, clr_step_size=10)
+classifier.save_model()
 
 # Evaluate the model
 classifier.evaluate(X_test, y_test)
