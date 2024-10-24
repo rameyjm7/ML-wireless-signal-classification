@@ -114,17 +114,22 @@ class ModulationLSTMClassifier:
 
         history = self.model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size, validation_data=(X_test, y_test), callbacks=[lr_scheduler, early_stopping])
 
-        self.model.save(self.model_path)
-        print(f"Model saved to {self.model_path}")
-
+        # Update total number of epochs trained
         self.stats["epochs_trained"] += epochs
         self.stats["last_trained"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         current_accuracy = max(history.history['val_accuracy'])
         self.stats["current_accuracy"] = current_accuracy
 
+        # Check if current accuracy is better than best_accuracy
         if current_accuracy > self.stats["best_accuracy"]:
+            print(f"New best accuracy: {current_accuracy}. Saving model...")
             self.stats["best_accuracy"] = current_accuracy
+            # Save the model if the accuracy improved
+            self.model.save(self.model_path)
+        else:
+            print(f"Current accuracy {current_accuracy} did not improve from best accuracy {self.stats['best_accuracy']}. Skipping model save.")
 
+        # Save the updated stats
         self.save_stats()
 
         return history
