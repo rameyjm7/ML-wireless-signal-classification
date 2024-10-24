@@ -90,6 +90,32 @@ class ModulationLSTMClassifier:
 
         return X_train, X_test, y_train, y_test
 
+    def augment_data(self, X, augmentation_params=None):
+        """
+        Augment the data with noise, scaling, and shifting.
+        :param X: Input data to augment
+        :param augmentation_params: Dictionary of augmentation parameters (e.g., noise level, scale factor)
+        :return: Augmented data
+        """
+        if augmentation_params is None:
+            augmentation_params = {
+                "noise_level": 0.01,
+                "scale_range": (0.9, 1.1),
+                "shift_range": (-0.1, 0.1)
+            }
+
+        noise_level = augmentation_params["noise_level"]
+        scale_range = augmentation_params["scale_range"]
+        shift_range = augmentation_params["shift_range"]
+
+        noise = np.random.normal(0, noise_level, X.shape)
+        scale = np.random.uniform(scale_range[0], scale_range[1], X.shape)
+        shift = np.random.uniform(shift_range[0], shift_range[1], X.shape)
+
+        X_augmented = X * scale + noise + shift
+        print("Data augmented with noise, scaling, and shifting.")
+        return X_augmented
+
     def build_model(self, input_shape, num_classes):
         if os.path.exists(self.model_path):
             print(f"Loading existing model from {self.model_path}")
@@ -129,7 +155,6 @@ class ModulationLSTMClassifier:
         return lr
 
     def train(self, X_train, y_train, X_test, y_test, epochs=20, batch_size=64, use_clr=False, clr_step_size=10):
-        # lr_scheduler = ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=3, min_lr=1e-6)
         early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
 
         callbacks = [early_stopping]
@@ -160,13 +185,36 @@ class ModulationLSTMClassifier:
         self.save_stats()
 
         return history
-
-    def train_continuously(self, X_train, y_train, X_test, y_test, batch_size=64, use_clr=False, clr_step_size=10):
+    
+    def train_variable(self, X_train, y_train, X_test, y_test):
+        try:
+            learning_rates = [1e-4, 0.5e-4, 1e-5, 0.5e-5, 1e-6]
+            # train with different batch sizes and learning rates
+            for batch_size in range(8,64,8):
+                print(f"Setting batch size to : {batch_size}")
+                for learning_rate in learning_rates[::-1]: # reverse, start with 1e-6
+                    print(f"Setting learning rate to : {learning_rate}")
+                    for epoch in range(10,50,10):
+                        print(f"Setting number of epochs to : {epoch}")
+                        classifier.set_learning_rate(learning_rate)
+                        classifier.train(X_train, y_train, X_test, y_test, epochs=epoch, batch_size=batch_size, use_clr=False, clr_step_size=10)
+        except KeyboardInterrupt:
+            print("\nTraining interrupted by user.")
+            self.evaluate(X_test, y_test)
+            self.save_stats()
+    
+    def train_continuously(self, X_train, y_train, X_test, y_test, batch_size=64, augment_after_epochs=5, use_clr=False, clr_step_size=10):
         try:
             epoch = 1
             while True:
                 print(f"\nStarting epoch {epoch}")
                 self.train(X_train, y_train, X_test, y_test, epochs=1, batch_size=batch_size, use_clr=use_clr, clr_step_size=clr_step_size)
+
+                # Augment data after every `augment_after_epochs` number of epochs
+                if epoch % augment_after_epochs == 0:
+                    print(f"Augmenting data at epoch {epoch}")
+                    X_train = self.augment_data(X_train)
+
                 epoch += 1
         except KeyboardInterrupt:
             print("\nTraining interrupted by user.")
@@ -186,6 +234,7 @@ class ModulationLSTMClassifier:
     def change_optimizer(self, new_optimizer):
         self.model.compile(optimizer=new_optimizer, loss='sparse_categorical_crossentropy', metrics=['accuracy'])
         print("Optimizer updated and model recompiled.")
+
 
 # Usage
 data_path = '../RML2016.10a_dict.pkl'
@@ -207,13 +256,10 @@ num_classes = len(np.unique(y_train))  # Number of unique modulation types
 classifier.build_model(input_shape, num_classes)
 
 # Set the learning rate
-classifier.set_learning_rate(1e-3)
+classifier.set_learning_rate(1e-4)
 
-# Train the model with Cyclical Learning Rate (CLR)
-# classifier.train(X_train, y_train, X_test, y_test, epochs=50, batch_size=64, use_clr=True, clr_step_size=10)
-
-# Train continuously if needed
-classifier.train_continuously(X_train, y_train, X_test, y_test, batch_size=64, use_clr=False, clr_step_size=10)
+# Train continuously with data augmentation after every 5 epochs
+classifier.train_continuously(X_train, y_train, X_test, y_test, batch_size=64, augment_after_epochs=5, use_clr=False, clr_step_size=10)
 
 # Evaluate the model
 classifier.evaluate(X_test, y_test)
