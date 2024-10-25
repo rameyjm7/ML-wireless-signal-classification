@@ -2,18 +2,14 @@ import os
 import ctypes
 import json
 from datetime import datetime
-os.environ['LD_PRELOAD'] = '/home/dev/python/lib/python3.8/site-packages/sklearn/__check_build/../../scikit_learn.libs/libgomp-d22c30c5.so.1.0.0'
-ctypes.cdll.LoadLibrary("libgomp.so.1")
-import pickle
 import numpy as np
+import pickle
 import tensorflow as tf
-from tensorflow.keras.optimizers import Adam, SGD
+from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.models import Sequential, load_model
 from tensorflow.keras.layers import LSTM, Dense, Dropout
-
-from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
-
+from sklearn.model_selection import train_test_split
 from tensorflow.keras.callbacks import ReduceLROnPlateau, EarlyStopping, LearningRateScheduler
 
 try:
@@ -60,6 +56,38 @@ class ModulationLSTMClassifier:
         with open(self.data_path, 'rb') as f:
             self.data = pickle.load(f, encoding='latin1')
 
+    def compute_fft_features(self, signal):
+        """
+        Compute the FFT to get the center frequency and peak power.
+        """
+        fft_result = np.fft.fft(signal)
+        magnitude = np.abs(fft_result)
+
+        # Find the index of the peak magnitude
+        peak_idx = np.argmax(magnitude)
+
+        # Peak frequency based on the FFT bin (normalized for now)
+        center_frequency = peak_idx  # In terms of bin number. You can scale to Hz if needed.
+
+        # Peak power in dB
+        peak_power = 20 * np.log10(magnitude[peak_idx])
+
+        return center_frequency, peak_power
+
+    def determine_signal_type(self, mod_type):
+        """
+        Classify the modulation type as 'digital' or 'analog'.
+        """
+        digital_modulations = ['QPSK', '8PSK', 'BPSK', 'QAM16', 'QAM64']  # Example list
+        analog_modulations = ['AM', 'FM', 'SSB']  # Example list
+
+        if mod_type in digital_modulations:
+            return 1  # Digital
+        elif mod_type in analog_modulations:
+            return 0  # Analog
+        else:
+            return 1  # Default to digital if unknown
+
     def prepare_data(self):
         X = []
         y = []
@@ -68,11 +96,24 @@ class ModulationLSTMClassifier:
             for signal in signals:
                 iq_signal = np.vstack([signal[0], signal[1]]).T  # Combine real and imaginary parts (shape: (128, 2))
 
+                # Compute FFT features: center frequency and peak power
+                center_freq, peak_power = self.compute_fft_features(signal[0] + 1j * signal[1])
+
                 # Append SNR as an additional feature (shape: (128, 3))
                 snr_signal = np.full((128, 1), snr)  # Create an array of SNR with the same length as the signal
-                combined_signal = np.hstack([iq_signal, snr_signal])  # Combine IQ and SNR into a single array (shape: (128, 3))
+                
+                # Append center frequency, peak power, and signal type as additional features
+                center_freq_signal = np.full((128, 1), center_freq)  # Center frequency as a feature
+                peak_power_signal = np.full((128, 1), peak_power)  # Peak power in dB as a feature
+                
+                # Determine if the signal is digital (1) or analog (0)
+                signal_type = self.determine_signal_type(mod_type)
+                signal_type_feature = np.full((128, 1), signal_type)  # Analog or digital as a feature
 
-                X.append(combined_signal)  # Append the signal with SNR as an additional feature
+                # Combine all features into a single array
+                combined_signal = np.hstack([iq_signal, snr_signal, center_freq_signal, peak_power_signal, signal_type_feature])
+
+                X.append(combined_signal)  # Append the signal with all additional features
                 y.append(mod_type)  # Modulation type as label
 
         X = np.array(X)
@@ -85,7 +126,8 @@ class ModulationLSTMClassifier:
         # Split the data into training and testing sets
         X_train, X_test, y_train, y_test = train_test_split(X, y_encoded, test_size=0.2, random_state=42)
 
-        # Reshape data for LSTM: (samples, time steps, features), where features = 3 (I, Q, and SNR)
+        # Reshape data for LSTM: (samples, time steps, features)
+        # The features now include I, Q, SNR, center frequency, peak power, and signal type.
         X_train = X_train.reshape(-1, X_train.shape[1], X_train.shape[2])
         X_test = X_test.reshape(-1, X_test.shape[1], X_test.shape[2])
 
@@ -150,45 +192,6 @@ class ModulationLSTMClassifier:
             optimizer = Adam(learning_rate=self.learning_rate)
             self.model.compile(loss='sparse_categorical_crossentropy', optimizer=optimizer, metrics=['accuracy'])
 
-    def update_model_dropout(self, new_dropout_rate=0.3):
-        # Check if model is loaded or built
-        if self.model is None:
-            print("No model loaded. Please build or load a model first.")
-            return
-        
-        # Get the current model configuration (layer architecture)
-        model_config = self.model.get_config()
-
-        # Build a new model using the same configuration but with updated dropout values
-        new_model = Sequential()
-
-        for layer in model_config['layers']:
-            layer_type = layer['class_name']
-
-            if layer_type == 'LSTM':
-                new_model.add(LSTM(units=layer['config']['units'],
-                                input_shape=layer['config']['batch_input_shape'][1:], 
-                                return_sequences=layer['config']['return_sequences']))
-            elif layer_type == 'Dense':
-                new_model.add(Dense(units=layer['config']['units'], activation=layer['config']['activation']))
-            elif layer_type == 'Dropout':
-                # Replace Dropout value with the new one
-                new_model.add(Dropout(rate=new_dropout_rate))
-            else:
-                raise ValueError(f"Unhandled layer type: {layer_type}")
-
-        # Compile the new model with the same optimizer and learning rate
-        optimizer = Adam(learning_rate=self.learning_rate)
-        new_model.compile(loss='sparse_categorical_crossentropy', optimizer=optimizer, metrics=['accuracy'])
-
-        # Set the new model's weights to be the same as the old model
-        new_model.set_weights(self.model.get_weights())
-        
-        # Replace the old model with the new one
-        self.model = new_model
-        print(f"Updated Dropout layers to {new_dropout_rate} and recompiled the model.")
-
-
     def set_learning_rate(self, new_lr):
         """
         Update the learning rate for the model.
@@ -248,24 +251,7 @@ class ModulationLSTMClassifier:
         mpath = f'{self.model_path}'
         self.model.save(mpath, save_format='keras')
         print(f"Model saved to {mpath}")
-         
-    def train_variable(self, X_train, y_train, X_test, y_test):
-        try:
-            learning_rates = [1e-4, 0.5e-4, 1e-5, 0.5e-5, 1e-6]
-            # train with different batch sizes and learning rates
-            for batch_size in range(8,64,8):
-                print(f"Setting batch size to : {batch_size}")
-                for learning_rate in learning_rates[::-1]: # reverse, start with 1e-6
-                    print(f"Setting learning rate to : {learning_rate}")
-                    for epoch in range(10,50,10):
-                        print(f"Setting number of epochs to : {epoch}")
-                        classifier.set_learning_rate(learning_rate)
-                        classifier.train(X_train, y_train, X_test, y_test, epochs=epoch, batch_size=batch_size, use_clr=False, clr_step_size=10)
-        except KeyboardInterrupt:
-            print("\nTraining interrupted by user.")
-            self.evaluate(X_test, y_test)
-            self.save_stats()
-    
+
     def train_continuously(self, X_train, y_train, X_test, y_test, batch_size=64, use_clr=False, clr_step_size=10):
         try:
             epoch = 1
@@ -296,7 +282,7 @@ class ModulationLSTMClassifier:
 
 # Usage
 data_path = '../RML2016.10a_dict.pkl'
-model_path = 'rnn_lstm_w_SNR.keras'  # Path to save and load the model
+model_path = 'rnn_lstm_multifeature.keras'  # Path to save and load the model
 stats_path = f'{model_path}_stats.json'  # Path to save and load model stats
 
 # Initialize the classifier
