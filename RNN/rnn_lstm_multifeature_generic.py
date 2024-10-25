@@ -411,10 +411,20 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
         return X_train, X_test, y_train, y_test
 
 
+
+# Get the directory of the current script
+script_dir = os.path.dirname(os.path.abspath(__file__))
+
+# Paths with the script directory as the base
+data_path = os.path.join(script_dir, '..', 'RML2016.10a_dict.pkl')  # One level up from the script's directory
+model_path = os.path.join(script_dir, 'rnn_lstm_multifeature_generic.keras')
+stats_path = os.path.join(script_dir, f'{model_path}_stats.json')
+
 # Usage Example
-data_path = '../RML2016.10a_dict.pkl'
-model_path = 'rnn_lstm_multifeature_generic.keras'
-stats_path = f'{model_path}_stats.json'
+print("Data path:", data_path)
+print("Model path:", model_path)
+print("Stats path:", stats_path)
+
 
 # Initialize the classifier
 classifier = ModulationLSTMClassifier(data_path, model_path, stats_path)
