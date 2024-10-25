@@ -108,7 +108,7 @@ class BaseModulationClassifier(ABC):
             epoch = 1
             while True:
                 print(f"\nStarting epoch {epoch}")
-                self.train(X_train, y_train, X_test, y_test, epochs=1, batch_size=batch_size, use_clr=use_clr, clr_step_size=clr_step_size)
+                self.train(X_train, y_train, X_test, y_test, epochs=10, batch_size=batch_size, use_clr=use_clr, clr_step_size=clr_step_size)
 
                 epoch += 1
         except KeyboardInterrupt:
@@ -154,7 +154,7 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
             optimizer = Adam(learning_rate=self.learning_rate)
             self.model.compile(loss='sparse_categorical_crossentropy', optimizer=optimizer, metrics=['accuracy'])
             
-    def train(self, X_train, y_train, X_test, y_test, epochs=20, batch_size=64, use_clr=False, clr_step_size=10):
+    def train(self, X_train, y_train, X_test, y_test, epochs=20, batch_size=64, use_clr=False, clr_step_size=10, augment_data = False):
         early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
 
         callbacks = [early_stopping]
@@ -163,11 +163,15 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
         if use_clr:
             clr_scheduler = LearningRateScheduler(lambda epoch: self.cyclical_lr(epoch, step_size=clr_step_size))
             callbacks.append(clr_scheduler)
+    
+        if augment_data:
+            for epoch in range(epochs):
+                # Apply progressive augmentation
+                X_train_augmented = self.augment_data_progressive(X_train.copy(), epoch, epochs)
+                history = self.model.fit(X_train_augmented, y_train, epochs=1, batch_size=batch_size, validation_data=(X_test, y_test), callbacks=callbacks)
+        else:
+            history = self.model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size, validation_data=(X_test, y_test), callbacks=callbacks)
 
-        for epoch in range(epochs):
-            # Apply progressive augmentation
-            X_train_augmented = self.augment_data_progressive(X_train.copy(), epoch, epochs)
-            history = self.model.fit(X_train_augmented, y_train, epochs=1, batch_size=batch_size, validation_data=(X_test, y_test), callbacks=callbacks)
 
         # Update total number of epochs trained
         self.stats["epochs_trained"] += epochs
