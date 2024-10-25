@@ -14,7 +14,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 
 from tensorflow.keras.callbacks import ReduceLROnPlateau
-from tensorflow.keras.callbacks import EarlyStopping
+from tensorflow.keras.callbacks import EarlyStopping, LearningRateScheduler
 
 try:
     import torch
@@ -108,11 +108,18 @@ class ModulationLSTMClassifier:
             optimizer = Adam(learning_rate=0.0001)
             self.model.compile(loss='sparse_categorical_crossentropy', optimizer=optimizer, metrics=['accuracy'])
 
-    def train(self, X_train, y_train, X_test, y_test, epochs=20, batch_size=64):
-        lr_scheduler = ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=3, min_lr=1e-6)
+    def train(self, X_train, y_train, X_test, y_test, epochs=20, batch_size=64, use_clr=False, clr_step_size=10, base_lr=1e-5, max_lr=1e-3):
         early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
 
-        history = self.model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size, validation_data=(X_test, y_test), callbacks=[lr_scheduler, early_stopping])
+        callbacks = [early_stopping]
+
+        # Add Cyclical Learning Rate (CLR) if requested
+        if use_clr:
+            clr_scheduler = LearningRateScheduler(lambda epoch: self.cyclical_lr(epoch, base_lr=base_lr, max_lr=max_lr, step_size=clr_step_size))
+            callbacks.append(clr_scheduler)
+
+        # Now the cyclic learning rate scheduler is included in the callbacks
+        history = self.model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size, validation_data=(X_test, y_test), callbacks=callbacks)
 
         # Update total number of epochs trained
         self.stats["epochs_trained"] += epochs
@@ -125,7 +132,7 @@ class ModulationLSTMClassifier:
             print(f"New best accuracy: {current_accuracy}. Saving model...")
             self.stats["best_accuracy"] = current_accuracy
             # Save the model if the accuracy improved
-            self.model.save(self.model_path)
+            self.save_model()
         else:
             print(f"Current accuracy {current_accuracy} did not improve from best accuracy {self.stats['best_accuracy']}. Skipping model save.")
 
@@ -133,6 +140,7 @@ class ModulationLSTMClassifier:
         self.save_stats()
 
         return history
+
 
     def evaluate(self, X_test, y_test):
         test_loss, test_acc = self.model.evaluate(X_test, y_test)
