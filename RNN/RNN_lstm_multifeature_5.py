@@ -81,13 +81,143 @@ class ModulationLSTMClassifier:
 
         return center_frequency, peak_power, average_power, std_dev_power
 
-    def compute_instantaneous_phase(self, signal):
+    def compute_instantaneous_features(self, signal):
         """
-        Compute the instantaneous phase using the Hilbert transform.
+        Compute the instantaneous amplitude, phase, and frequency using the Hilbert transform.
         """
-        analytic_signal = hilbert(real(signal))
+        # Compute the analytic signal using Hilbert transform
+        analytic_signal = hilbert(np.real(signal))
+
+        # Instantaneous amplitude (envelope of the signal)
+        instantaneous_amplitude = np.abs(analytic_signal)
+
+        # Instantaneous phase
         instantaneous_phase = np.angle(analytic_signal)
-        return instantaneous_phase
+
+        # Instantaneous frequency is the derivative of the phase
+        instantaneous_frequency = np.diff(np.unwrap(instantaneous_phase))
+        
+        # Since the diff operation reduces the length by 1, we pad it to match the original length
+        instantaneous_frequency = np.pad(instantaneous_frequency, (0, 1), mode='edge')
+
+        return instantaneous_amplitude, instantaneous_phase, instantaneous_frequency
+
+    def autocorrelation(self, signal):
+        """
+        Compute the autocorrelation of the signal.
+        """
+        result = np.correlate(signal, signal, mode='full')
+        return result[result.size // 2:]
+
+    def is_digital_signal(self, autocorr_signal, threshold=0.1):
+        """
+        Determine if the signal is digital or analog based on its autocorrelation.
+        Digital signals tend to have sharper changes in their autocorrelation function.
+        """
+        # Find the first major drop in the autocorrelation
+        normalized_autocorr = autocorr_signal / np.max(autocorr_signal)
+        # If the autocorrelation drops significantly (below the threshold), we assume it's digital
+        is_digital = np.any(normalized_autocorr < threshold)
+        return 1 if is_digital else 0
+
+    def compute_fft_features(self, signal):
+        """
+        Compute the FFT to get the center frequency, peak power, average power, and std dev of power.
+        """
+        fft_result = np.fft.fft(signal)
+        magnitude = np.abs(fft_result)
+
+        # Find the index of the peak magnitude
+        peak_idx = np.argmax(magnitude)
+
+        # Peak frequency based on the FFT bin (normalized for now)
+        center_frequency = peak_idx  # In terms of bin number
+
+        # Peak power in dB
+        peak_power = 20 * np.log10(magnitude[peak_idx])
+
+        # Average power and standard deviation of power
+        avg_power = 20 * np.log10(np.mean(magnitude))
+        std_dev_power = np.std(20 * np.log10(magnitude))
+
+        return center_frequency, peak_power, avg_power, std_dev_power
+
+    def compute_instantaneous_features(self, signal):
+        """
+        Compute instantaneous amplitude, phase, and frequency using the Hilbert transform.
+        """
+        analytic_signal = hilbert(np.real(signal))
+        instantaneous_amplitude = np.abs(analytic_signal)
+        instantaneous_phase = np.unwrap(np.angle(analytic_signal))
+        instantaneous_frequency = np.diff(instantaneous_phase)  # Derivative of the phase
+
+        # Pad the instantaneous frequency to match the original signal length
+        instantaneous_frequency = np.pad(instantaneous_frequency, (0, 1), mode='constant')
+
+        return instantaneous_amplitude, instantaneous_phase, instantaneous_frequency
+    
+    def compute_kurtosis(self, signal):
+        """
+        Compute the kurtosis of a signal.
+        Kurtosis is a measure of the "tailedness" of the probability distribution of a real-valued signal.
+        """
+        mean_signal = np.mean(signal)
+        std_signal = np.std(signal)
+        kurtosis = np.mean((signal - mean_signal)**4) / (std_signal**4)
+        return kurtosis
+    
+    def compute_skewness(self, signal):
+        """
+        Compute the skewness of a signal.
+        Skewness is a measure of the asymmetry of the probability distribution of a real-valued signal.
+        """
+        mean_signal = np.mean(signal)
+        std_signal = np.std(signal)
+        skewness = np.mean((signal - mean_signal)**3) / (std_signal**3)
+        return skewness
+    
+    def compute_spectral_energy_concentration(self, signal, center_freq_idx, bandwidth):
+        """
+        Compute the spectral energy concentration around the peak center frequency.
+        This measures how concentrated the energy is around the peak frequency within a specified bandwidth.
+        
+        :param signal: The input IQ signal (real + imaginary parts)
+        :param center_freq_idx: The index of the center frequency (in terms of FFT bin)
+        :param bandwidth: The bandwidth (in terms of number of bins) around the center frequency
+        """
+        fft_result = np.fft.fft(signal)
+        magnitude = np.abs(fft_result)
+        
+        # Select bins within the specified bandwidth around the center frequency
+        lower_bound = max(0, center_freq_idx - bandwidth // 2)
+        upper_bound = min(len(magnitude), center_freq_idx + bandwidth // 2)
+        
+        # Compute the energy concentration within the specified bandwidth
+        spectral_energy = np.sum(magnitude[lower_bound:upper_bound]**2)
+        total_energy = np.sum(magnitude**2)
+        
+        energy_concentration = spectral_energy / total_energy
+        return energy_concentration
+
+    def compute_zero_crossing_rate(self, signal):
+        """
+        Compute the zero-crossing rate of a signal.
+        Zero-crossing rate is the rate at which the signal changes sign.
+        """
+        zero_crossings = np.where(np.diff(np.sign(signal)))[0]
+        zcr = len(zero_crossings) / len(signal)
+        return zcr
+    
+    def compute_instantaneous_frequency_jitter(self, instantaneous_frequency):
+        """
+        Compute the instantaneous frequency jitter, which is the standard deviation of instantaneous frequency.
+        
+        :param instantaneous_frequency: Array of instantaneous frequency values
+        """
+        freq_jitter = np.std(instantaneous_frequency)
+        return freq_jitter
+
+
 
     def prepare_data(self):
         X = []
@@ -100,19 +230,44 @@ class ModulationLSTMClassifier:
                 # Compute FFT features: center frequency, peak power, average power, and std dev of power
                 center_freq, peak_power, avg_power, std_dev_power = self.compute_fft_features(signal[0] + 1j * signal[1])
                 
-                # Compute the instantaneous phase from the IQ signal
-                instantaneous_phase = self.compute_instantaneous_phase(signal[0] + 1j * signal[1])
+                # Compute the instantaneous amplitude, phase, and frequency from the IQ signal
+                instantaneous_amplitude, instantaneous_phase, instantaneous_frequency = self.compute_instantaneous_features(signal[0] + 1j * signal[1])
+
+                # Compute autocorrelation and whether the signal is digital or analog
+                autocorr_signal = self.autocorrelation(signal[0])
+                is_digital = self.is_digital_signal(autocorr_signal)
+
+                # Compute higher-order statistics
+                kurtosis = compute_kurtosis(iq_signal)
+                skewness = compute_skewness(iq_signal)
+
+                # Compute spectral energy concentration around the peak center frequency
+                energy_concentration = compute_spectral_energy_concentration(signal[0] + 1j * signal[1], center_freq, bandwidth=10)
+
+                # Compute zero-crossing rate
+                zcr = compute_zero_crossing_rate(signal[0])
+
+                # Compute instantaneous frequency jitter
+                freq_jitter = compute_instantaneous_frequency_jitter(instantaneous_frequency)
 
                 # Append SNR as an additional feature (shape: (128, 1))
                 snr_signal = np.full((128, 1), snr)  # Create an array of SNR with the same length as the signal
                 
-                # Append FFT-based features and instantaneous phase as additional features
+                # Append FFT-based features, instantaneous features, and additional features
                 center_freq_signal = np.full((128, 1), center_freq)  # Center frequency as a feature
                 peak_power_signal = np.full((128, 1), peak_power)  # Peak power in dB as a feature
                 avg_power_signal = np.full((128, 1), avg_power)  # Average power in dB as a feature
                 std_dev_power_signal = np.full((128, 1), std_dev_power)  # Standard deviation of power as a feature
+                inst_amplitude_signal = instantaneous_amplitude.reshape(-1, 1)  # Instantaneous amplitude
                 inst_phase_signal = instantaneous_phase.reshape(-1, 1)  # Instantaneous phase
-                
+                inst_frequency_signal = instantaneous_frequency.reshape(-1, 1)  # Instantaneous frequency
+                is_digital_signal_feature = np.full((128, 1), is_digital)  # Whether the signal is digital or analog
+                kurtosis_signal = np.full((128, 1), kurtosis)
+                skewness_signal = np.full((128, 1), skewness)
+                energy_concentration_signal = np.full((128, 1), energy_concentration)
+                zcr_signal = np.full((128, 1), zcr)
+                freq_jitter_signal = np.full((128, 1), freq_jitter)
+
                 # Combine all features into a single array
                 combined_signal = np.hstack([
                     iq_signal,                # IQ Signal (real and imaginary)
@@ -121,7 +276,15 @@ class ModulationLSTMClassifier:
                     peak_power_signal,        # Peak power
                     avg_power_signal,         # Average power
                     std_dev_power_signal,     # Standard deviation of power
-                    inst_phase_signal         # Instantaneous phase (Hilbert transform)
+                    inst_amplitude_signal,    # Instantaneous amplitude
+                    inst_phase_signal,        # Instantaneous phase
+                    inst_frequency_signal,    # Instantaneous frequency
+                    is_digital_signal_feature,# Whether the signal is digital or analog
+                    kurtosis_signal,          # Kurtosis
+                    skewness_signal,          # Skewness
+                    energy_concentration_signal,  # Spectral energy concentration
+                    zcr_signal,               # Zero-crossing rate
+                    freq_jitter_signal        # Instantaneous frequency jitter
                 ])
 
                 X.append(combined_signal)  # Append the signal with all additional features
@@ -138,11 +301,11 @@ class ModulationLSTMClassifier:
         X_train, X_test, y_train, y_test = train_test_split(X, y_encoded, test_size=0.2, random_state=42)
 
         # Reshape data for LSTM: (samples, time steps, features)
-        # The features now include I, Q, SNR, center frequency, peak power, average power, std dev of power, and instantaneous phase.
         X_train = X_train.reshape(-1, X_train.shape[1], X_train.shape[2])
         X_test = X_test.reshape(-1, X_test.shape[1], X_test.shape[2])
 
         return X_train, X_test, y_train, y_test
+
 
     def augment_data_progressive(self, X, current_epoch, total_epochs, augmentation_params=None):
         """

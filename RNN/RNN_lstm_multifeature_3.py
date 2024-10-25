@@ -81,13 +81,26 @@ class ModulationLSTMClassifier:
 
         return center_frequency, peak_power, average_power, std_dev_power
 
-    def compute_instantaneous_phase(self, signal):
+    def compute_instantaneous_features(self, signal):
         """
-        Compute the instantaneous phase using the Hilbert transform.
+        Compute the instantaneous amplitude, phase, and frequency using the Hilbert transform.
         """
-        analytic_signal = hilbert(real(signal))
+        # Compute the analytic signal using Hilbert transform
+        analytic_signal = hilbert(np.real(signal))
+
+        # Instantaneous amplitude (envelope of the signal)
+        instantaneous_amplitude = np.abs(analytic_signal)
+
+        # Instantaneous phase
         instantaneous_phase = np.angle(analytic_signal)
-        return instantaneous_phase
+
+        # Instantaneous frequency is the derivative of the phase
+        instantaneous_frequency = np.diff(np.unwrap(instantaneous_phase))
+        
+        # Since the diff operation reduces the length by 1, we pad it to match the original length
+        instantaneous_frequency = np.pad(instantaneous_frequency, (0, 1), mode='edge')
+
+        return instantaneous_amplitude, instantaneous_phase, instantaneous_frequency
 
     def prepare_data(self):
         X = []
@@ -100,18 +113,20 @@ class ModulationLSTMClassifier:
                 # Compute FFT features: center frequency, peak power, average power, and std dev of power
                 center_freq, peak_power, avg_power, std_dev_power = self.compute_fft_features(signal[0] + 1j * signal[1])
                 
-                # Compute the instantaneous phase from the IQ signal
-                instantaneous_phase = self.compute_instantaneous_phase(signal[0] + 1j * signal[1])
+                # Compute the instantaneous amplitude, phase, and frequency from the IQ signal
+                instantaneous_amplitude, instantaneous_phase, instantaneous_frequency = self.compute_instantaneous_features(signal[0] + 1j * signal[1])
 
                 # Append SNR as an additional feature (shape: (128, 1))
                 snr_signal = np.full((128, 1), snr)  # Create an array of SNR with the same length as the signal
                 
-                # Append FFT-based features and instantaneous phase as additional features
+                # Append FFT-based features and instantaneous features
                 center_freq_signal = np.full((128, 1), center_freq)  # Center frequency as a feature
                 peak_power_signal = np.full((128, 1), peak_power)  # Peak power in dB as a feature
                 avg_power_signal = np.full((128, 1), avg_power)  # Average power in dB as a feature
                 std_dev_power_signal = np.full((128, 1), std_dev_power)  # Standard deviation of power as a feature
+                inst_amplitude_signal = instantaneous_amplitude.reshape(-1, 1)  # Instantaneous amplitude
                 inst_phase_signal = instantaneous_phase.reshape(-1, 1)  # Instantaneous phase
+                inst_frequency_signal = instantaneous_frequency.reshape(-1, 1)  # Instantaneous frequency
                 
                 # Combine all features into a single array
                 combined_signal = np.hstack([
@@ -121,7 +136,9 @@ class ModulationLSTMClassifier:
                     peak_power_signal,        # Peak power
                     avg_power_signal,         # Average power
                     std_dev_power_signal,     # Standard deviation of power
-                    inst_phase_signal         # Instantaneous phase (Hilbert transform)
+                    inst_amplitude_signal,    # Instantaneous amplitude
+                    inst_phase_signal,        # Instantaneous phase (Hilbert transform)
+                    inst_frequency_signal     # Instantaneous frequency
                 ])
 
                 X.append(combined_signal)  # Append the signal with all additional features
@@ -138,11 +155,12 @@ class ModulationLSTMClassifier:
         X_train, X_test, y_train, y_test = train_test_split(X, y_encoded, test_size=0.2, random_state=42)
 
         # Reshape data for LSTM: (samples, time steps, features)
-        # The features now include I, Q, SNR, center frequency, peak power, average power, std dev of power, and instantaneous phase.
+        # The features now include I, Q, SNR, center frequency, peak power, average power, std dev of power, instantaneous amplitude, phase, and frequency.
         X_train = X_train.reshape(-1, X_train.shape[1], X_train.shape[2])
         X_test = X_test.reshape(-1, X_test.shape[1], X_test.shape[2])
 
         return X_train, X_test, y_train, y_test
+
 
     def augment_data_progressive(self, X, current_epoch, total_epochs, augmentation_params=None):
         """
