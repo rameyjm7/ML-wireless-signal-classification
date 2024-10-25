@@ -280,7 +280,7 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
         freq_jitter = np.std(instantaneous_frequency)
         return freq_jitter
 
-    def cyclical_lr(self, epoch, base_lr=1e-5, max_lr=1e-3, step_size=10):
+    def cyclical_lr(self, epoch, base_lr=1e-7, max_lr=1e-5, step_size=10):
         """
         Implements cyclical learning rate.
         The learning rate cycles between base_lr and max_lr over the course of step_size epochs.
