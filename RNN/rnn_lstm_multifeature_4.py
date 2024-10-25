@@ -370,7 +370,7 @@ class ModulationLSTMClassifier:
 
 # Usage
 data_path = '../RML2016.10a_dict.pkl'
-model_path = 'rnn_lstm_multifeature_2.keras'  # Path to save and load the model
+model_path = 'rnn_lstm_multifeature_4.keras'  # Path to save and load the model
 stats_path = f'{model_path}_stats.json'  # Path to save and load model stats
 
 # Initialize the classifier

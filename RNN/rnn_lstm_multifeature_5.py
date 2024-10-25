@@ -26,6 +26,7 @@ class ModulationLSTMClassifier:
         self.data_path = data_path
         self.model_path = model_path
         self.stats_path = stats_path
+        self.data_pickle_path = f"{model_path}_data.pkl"  # Pickle path for preprocessed data
         self.data = None
         self.label_encoder = None
         self.model = None
@@ -219,7 +220,20 @@ class ModulationLSTMClassifier:
 
 
 
+    def load_data(self):
+        with open(self.data_path, 'rb') as f:
+            self.data = pickle.load(f, encoding='latin1')
+
     def prepare_data(self):
+        # Check if the processed data pickle file exists
+        if os.path.exists(self.data_pickle_path):
+            print(f"Loading prepared data from {self.data_pickle_path}")
+            with open(self.data_pickle_path, 'rb') as f:
+                X_train, X_test, y_train, y_test = pickle.load(f)
+            return X_train, X_test, y_train, y_test
+
+        print("Preparing data from scratch...")
+
         X = []
         y = []
 
@@ -229,7 +243,7 @@ class ModulationLSTMClassifier:
 
                 # Compute FFT features: center frequency, peak power, average power, and std dev of power
                 center_freq, peak_power, avg_power, std_dev_power = self.compute_fft_features(signal[0] + 1j * signal[1])
-                
+
                 # Compute the instantaneous amplitude, phase, and frequency from the IQ signal
                 instantaneous_amplitude, instantaneous_phase, instantaneous_frequency = self.compute_instantaneous_features(signal[0] + 1j * signal[1])
 
@@ -238,21 +252,21 @@ class ModulationLSTMClassifier:
                 is_digital = self.is_digital_signal(autocorr_signal)
 
                 # Compute higher-order statistics
-                kurtosis = compute_kurtosis(iq_signal)
-                skewness = compute_skewness(iq_signal)
+                kurtosis = self.compute_kurtosis(iq_signal)
+                skewness = self.compute_skewness(iq_signal)
 
                 # Compute spectral energy concentration around the peak center frequency
-                energy_concentration = compute_spectral_energy_concentration(signal[0] + 1j * signal[1], center_freq, bandwidth=10)
+                energy_concentration = self.compute_spectral_energy_concentration(signal[0] + 1j * signal[1], center_freq, bandwidth=10)
 
                 # Compute zero-crossing rate
-                zcr = compute_zero_crossing_rate(signal[0])
+                zcr = self.compute_zero_crossing_rate(signal[0])
 
                 # Compute instantaneous frequency jitter
-                freq_jitter = compute_instantaneous_frequency_jitter(instantaneous_frequency)
+                freq_jitter = self.compute_instantaneous_frequency_jitter(instantaneous_frequency)
 
                 # Append SNR as an additional feature (shape: (128, 1))
                 snr_signal = np.full((128, 1), snr)  # Create an array of SNR with the same length as the signal
-                
+
                 # Append FFT-based features, instantaneous features, and additional features
                 center_freq_signal = np.full((128, 1), center_freq)  # Center frequency as a feature
                 peak_power_signal = np.full((128, 1), peak_power)  # Peak power in dB as a feature
@@ -303,6 +317,11 @@ class ModulationLSTMClassifier:
         # Reshape data for LSTM: (samples, time steps, features)
         X_train = X_train.reshape(-1, X_train.shape[1], X_train.shape[2])
         X_test = X_test.reshape(-1, X_test.shape[1], X_test.shape[2])
+
+        # Save the processed data to a pickle file
+        with open(self.data_pickle_path, 'wb') as f:
+            pickle.dump((X_train, X_test, y_train, y_test), f)
+        print(f"Prepared data saved to {self.data_pickle_path}")
 
         return X_train, X_test, y_train, y_test
 
@@ -456,7 +475,7 @@ class ModulationLSTMClassifier:
 
 # Usage
 data_path = '../RML2016.10a_dict.pkl'
-model_path = 'rnn_lstm_multifeature_2.keras'  # Path to save and load the model
+model_path = 'rnn_lstm_multifeature_5.keras'  # Path to save and load the model
 stats_path = f'{model_path}_stats.json'  # Path to save and load model stats
 
 # Initialize the classifier
