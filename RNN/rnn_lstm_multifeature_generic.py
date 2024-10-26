@@ -17,6 +17,8 @@ from tensorflow.keras.callbacks import ReduceLROnPlateau, EarlyStopping, Learnin
 from scipy.signal import hilbert
 
 
+tf.get_logger().setLevel('ERROR')
+
 # Base Abstract Class
 class BaseModulationClassifier(ABC):
     def __init__(self, data_path, model_path="saved_model.h5", stats_path="model_stats.json"):
@@ -121,6 +123,10 @@ class BaseModulationClassifier(ABC):
         print(f"Test Accuracy: {test_acc * 100:.2f}%")
         return test_acc
     
+    def predict(self, X):
+        predictions = self.model.predict(X)
+        predicted_labels = self.label_encoder.inverse_transform(np.argmax(predictions, axis=1))
+        return predicted_labels
 
 # Child class inheriting from the abstract class, implementing `prepare_data`
 class ModulationLSTMClassifier(BaseModulationClassifier):
@@ -163,33 +169,32 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
         if use_clr:
             clr_scheduler = LearningRateScheduler(lambda epoch: self.cyclical_lr(epoch, step_size=clr_step_size))
             callbacks.append(clr_scheduler)
-    
-        if augment_data:
+        for batch_size in [8,16,32,64]:
             for epoch in range(epochs):
-                # Apply progressive augmentation
-                X_train_augmented    = self.augment_data_progressive(X_train.copy(), epoch, epochs)
-                history = self.model.fit(X_train_augmented, y_train, epochs=1, batch_size=batch_size, validation_data=(X_test, y_test), callbacks=callbacks)
-        else:
-            history = self.model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size, validation_data=(X_test, y_test), callbacks=callbacks)
+                if augment_data:
+                    # Apply progressive augmentation
+                    X_train_augmented    = self.augment_data_progressive(X_train.copy(), epoch, epochs)
+                    history = self.model.fit(X_train_augmented, y_train, epochs=1, batch_size=batch_size, validation_data=(X_test, y_test), callbacks=callbacks)
+                else:
+                    history = self.model.fit(X_train, y_train, epochs=1, batch_size=batch_size, validation_data=(X_test, y_test), callbacks=callbacks)
 
+                # Update total number of epochs trained
+                self.stats["epochs_trained"] += epochs
+                self.stats["last_trained"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                current_accuracy = max(history.history['val_accuracy'])
+                self.stats["current_accuracy"] = current_accuracy
 
-        # Update total number of epochs trained
-        self.stats["epochs_trained"] += epochs
-        self.stats["last_trained"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        current_accuracy = max(history.history['val_accuracy'])
-        self.stats["current_accuracy"] = current_accuracy
+                # Check if current accuracy is better than best_accuracy
+                if current_accuracy > self.stats["best_accuracy"]:
+                    print(f"New best accuracy: {current_accuracy}. Saving model...")
+                    self.stats["best_accuracy"] = current_accuracy
+                    # Save the model if the accuracy improved
+                    self.save_model()
+                else:
+                    print(f"Current accuracy {current_accuracy} did not improve from best accuracy {self.stats['best_accuracy']}. Skipping model save.")
 
-        # Check if current accuracy is better than best_accuracy
-        if current_accuracy > self.stats["best_accuracy"]:
-            print(f"New best accuracy: {current_accuracy}. Saving model...")
-            self.stats["best_accuracy"] = current_accuracy
-            # Save the model if the accuracy improved
-            self.save_model()
-        else:
-            print(f"Current accuracy {current_accuracy} did not improve from best accuracy {self.stats['best_accuracy']}. Skipping model save.")
-
-        # Save the updated stats
-        self.save_stats()
+                # Save the updated stats
+                self.save_stats()
 
         return history
  
