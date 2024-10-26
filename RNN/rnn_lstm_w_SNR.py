@@ -112,9 +112,9 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
                 callbacks=callbacks,
             )
 
-        self.update_epoch_stats(epochs)
-        current_accuracy = max(history.history["val_accuracy"])
-        self.update_and_save_stats(current_accuracy)
+            self.update_epoch_stats(epochs)
+            current_accuracy = max(history.history["val_accuracy"])
+            self.update_and_save_stats(current_accuracy)
 
         return history
 
@@ -172,7 +172,7 @@ data_path = os.path.join(
     script_dir, "..", "RML2016.10a_dict.pkl"
 )  # One level up from the script's directory
 model_path = os.path.join(script_dir, "models", f"{model_name}.keras")
-stats_path = os.path.join(script_dir, "stats", f"{model_path}_stats.json")
+stats_path = os.path.join(script_dir, "stats", f"{model_name}_stats.json")
 
 # Usage Example
 print("Data path:", data_path)
