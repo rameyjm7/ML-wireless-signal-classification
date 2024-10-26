@@ -87,3 +87,50 @@ def compute_instantaneous_frequency_jitter(instantaneous_frequency):
     """
     freq_jitter = np.std(instantaneous_frequency)
     return freq_jitter
+
+
+def augment_data_progressive(
+        X, current_epoch, total_epochs, augmentation_params=None
+    ):
+        if augmentation_params is None:
+            augmentation_params = {
+                "noise_level": 0.001,
+                "scale_range": (0.99, 1.01),
+                "shift_range": (-0.01, 0.01),
+                "augment_percent": 0.5,
+            }
+
+        noise_level, scale_range, shift_range, augment_percent = (
+            augmentation_params["noise_level"],
+            augmentation_params["scale_range"],
+            augmentation_params["shift_range"],
+            augmentation_params["augment_percent"],
+        )
+
+        scale_factor = 1 - (current_epoch / total_epochs)
+        noise_level *= scale_factor
+        scale_range = (
+            1 + (scale_range[0] - 1) * scale_factor,
+            1 + (scale_range[1] - 1) * scale_factor,
+        )
+        shift_range = (shift_range[0] * scale_factor, shift_range[1] * scale_factor)
+
+        num_samples = X.shape[0]
+        num_to_augment = int(num_samples * augment_percent * scale_factor)
+        indices_to_augment = np.random.choice(
+            num_samples, num_to_augment, replace=False
+        )
+
+        noise = np.random.normal(
+            0, noise_level, (num_to_augment, X.shape[1], X.shape[2])
+        )
+        scale = np.random.uniform(
+            scale_range[0], scale_range[1], (num_to_augment, X.shape[1], X.shape[2])
+        )
+        shift = np.random.uniform(
+            shift_range[0], shift_range[1], (num_to_augment, X.shape[1], X.shape[2])
+        )
+
+        X[indices_to_augment] = X[indices_to_augment] * scale + noise + shift
+        print(f"Data augmented progressively for {num_to_augment} samples.")
+        return X

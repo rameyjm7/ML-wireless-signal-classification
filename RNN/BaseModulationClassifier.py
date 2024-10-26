@@ -134,3 +134,21 @@ class BaseModulationClassifier(ABC):
         predictions = self.model.predict(X)
         predicted_labels = self.label_encoder.inverse_transform(np.argmax(predictions, axis=1))
         return predicted_labels
+
+    def update_epoch_stats(self, epochs):
+        """Updates the stats for epochs trained and the last trained timestamp."""
+        self.stats["epochs_trained"] += epochs
+        self.stats["last_trained"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    def update_and_save_stats(self, current_accuracy):
+        """Updates stats with the current accuracy and saves the model if accuracy improves."""
+        self.stats["current_accuracy"] = current_accuracy
+
+        if current_accuracy > self.stats["best_accuracy"]:
+            print(f"New best accuracy: {current_accuracy}. Saving model...")
+            self.stats["best_accuracy"] = current_accuracy
+            self.save_model()
+        else:
+            print(f"Current accuracy {current_accuracy} did not improve from best accuracy {self.stats['best_accuracy']}. Skipping model save.")
+        
+        self.save_stats()

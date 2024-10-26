@@ -29,7 +29,8 @@ from SignalUtils import (
     compute_zero_crossing_rate,
     compute_instantaneous_frequency_jitter,
     compute_fft_features,
-    compute_instantaneous_features
+    compute_instantaneous_features,
+    augment_data_progressive
 )
 from BaseModulationClassifier import BaseModulationClassifier
 
@@ -90,7 +91,7 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
         for epoch in range(epochs):
             print(f"\nEpoch {epoch + 1}/{epochs}")
             if augment_data:
-                X_train_augmented = self.augment_data_progressive(X_train.copy(), epoch, epochs)
+                X_train_augmented = augment_data_progressive(X_train.copy(), epoch, epochs)
                 history = self.model.fit(X_train_augmented, y_train, epochs=1, batch_size=batch_size, validation_data=(X_test, y_test), callbacks=callbacks)
             else:
                 history = self.model.fit(X_train, y_train, epochs=1, batch_size=batch_size, validation_data=(X_test, y_test), callbacks=callbacks)
@@ -263,6 +264,11 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
 
         return X_train, X_test, y_train, y_test
 
+
+
+# set the model name 
+model_name = "rnn_lstm_multifeature_generic"
+
 # Get the directory of the current script
 script_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -270,8 +276,8 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 data_path = os.path.join(
     script_dir, "..", "RML2016.10a_dict.pkl"
 )  # One level up from the script's directory
-model_path = os.path.join(script_dir, "rnn_lstm_multifeature_generic.keras")
-stats_path = os.path.join(script_dir, f"{model_path}_stats.json")
+model_path = os.path.join(script_dir, "models", f"{model_name}.keras")
+stats_path = os.path.join(script_dir, "stats", f"{model_path}_stats.json")
 
 # Usage Example
 print("Data path:", data_path)
@@ -295,9 +301,6 @@ input_shape = (
 )  # Time steps and features (with SNR as additional feature)
 num_classes = len(np.unique(y_train))  # Number of unique modulation types
 classifier.build_model(input_shape, num_classes)
-
-# Set the learning rate
-classifier.set_learning_rate(1e-4)
 
 # Train continuously with cyclical learning rates
 classifier.train_continuously(
