@@ -2,11 +2,6 @@ import os
 import ctypes
 import json
 from datetime import datetime
-
-os.environ["LD_PRELOAD"] = (
-    "/home/dev/python/lib/python3.8/site-packages/sklearn/__check_build/../../scikit_learn.libs/libgomp-d22c30c5.so.1.0.0"
-)
-ctypes.cdll.LoadLibrary("libgomp.so.1")
 import pickle
 import numpy as np
 import tensorflow as tf
@@ -24,7 +19,7 @@ from tensorflow.keras.callbacks import (
     LearningRateScheduler,
 )
 
-from SignalUtils import augment_data_progressive
+from SignalUtils import augment_data_progressive, cyclical_lr
 
 
 class ModulationLSTMClassifier(BaseModulationClassifier):
@@ -84,13 +79,6 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
                 metrics=["accuracy"],
             )
 
-    def cyclical_lr(self, epoch, base_lr=1e-5, max_lr=1e-3, step_size=10):
-        cycle = np.floor(1 + epoch / (2 * step_size))
-        x = np.abs(epoch / step_size - 2 * cycle + 1)
-        lr = base_lr + (max_lr - base_lr) * max(0, (1 - x))
-        print(f"Learning rate for epoch {epoch+1}: {lr}")
-        return lr
-
     def train(
         self,
         X_train,
@@ -109,7 +97,7 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
 
         if use_clr:
             clr_scheduler = LearningRateScheduler(
-                lambda epoch: self.cyclical_lr(epoch, step_size=clr_step_size)
+                lambda epoch: cyclical_lr(epoch, step_size=clr_step_size)
             )
             callbacks.append(clr_scheduler)
 

@@ -30,7 +30,8 @@ from SignalUtils import (
     compute_instantaneous_frequency_jitter,
     compute_fft_features,
     compute_instantaneous_features,
-    augment_data_progressive
+    augment_data_progressive,
+    cyclical_lr
 )
 from BaseModulationClassifier import BaseModulationClassifier
 
@@ -44,19 +45,6 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
         self, data_path, model_path="saved_model.h5", stats_path="model_stats.json"
     ):
         super().__init__(data_path, model_path, stats_path)
-
-    def set_learning_rate(self, new_lr):
-        """
-        Update the learning rate for the model.
-        """
-        self.learning_rate = new_lr
-        optimizer = Adam(learning_rate=self.learning_rate)
-        self.model.compile(
-            optimizer=optimizer,
-            loss="sparse_categorical_crossentropy",
-            metrics=["accuracy"],
-        )
-        print(f"Learning rate set to: {self.learning_rate}")
 
     def build_model(self, input_shape, num_classes):
         if os.path.exists(self.model_path):
@@ -85,7 +73,7 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
         callbacks = [early_stopping]
         
         if use_clr:
-            clr_scheduler = LearningRateScheduler(lambda epoch: self.cyclical_lr(epoch, step_size=clr_step_size))
+            clr_scheduler = LearningRateScheduler(lambda epoch: cyclical_lr(epoch, step_size=clr_step_size))
             callbacks.append(clr_scheduler)
         
         for epoch in range(epochs):
@@ -118,74 +106,7 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
 
         self.stats["last_trained"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.save_stats()
-
-    def cyclical_lr(self, epoch, base_lr=1e-7, max_lr=1e-4, step_size=10):
-        """
-        Implements cyclical learning rate.
-        The learning rate cycles between base_lr and max_lr over the course of step_size epochs.
-        """
-        cycle = np.floor(1 + epoch / (2 * step_size))
-        x = np.abs(epoch / step_size - 2 * cycle + 1)
-        lr = base_lr + (max_lr - base_lr) * max(0, (1 - x))
-        print(f"Learning rate for epoch {epoch+1}: {lr}")
-        return lr
-
-    def augment_data_progressive(
-        self, X, current_epoch, total_epochs, augmentation_params=None
-    ):
-        """
-        Gradually reduce augmentation intensity over time.
-        :param X: Input data to augment
-        :param current_epoch: The current epoch number
-        :param total_epochs: Total number of epochs for the training
-        :param augmentation_params: Dictionary of augmentation parameters (e.g., noise level, scale factor)
-        :return: Augmented data
-        """
-        if augmentation_params is None:
-            augmentation_params = {
-                "noise_level": 0.001,
-                "scale_range": (0.99, 1.01),
-                "shift_range": (-0.01, 0.01),
-                "augment_percent": 0.5,  # Start augmenting 50% of the data
-            }
-
-        noise_level = augmentation_params["noise_level"]
-        scale_range = augmentation_params["scale_range"]
-        shift_range = augmentation_params["shift_range"]
-        augment_percent = augmentation_params["augment_percent"]
-
-        # Decrease augmentation intensity as training progresses
-        scale_factor = 1 - (current_epoch / total_epochs)
-        noise_level *= scale_factor
-        scale_range = (
-            1 + (scale_range[0] - 1) * scale_factor,
-            1 + (scale_range[1] - 1) * scale_factor,
-        )
-        shift_range = (shift_range[0] * scale_factor, shift_range[1] * scale_factor)
-
-        # Selectively augment a subset of the data
-        num_samples = X.shape[0]
-        num_to_augment = int(num_samples * augment_percent * scale_factor)
-        indices_to_augment = np.random.choice(
-            num_samples, num_to_augment, replace=False
-        )
-
-        noise = np.random.normal(
-            0, noise_level, (num_to_augment, X.shape[1], X.shape[2])
-        )
-        scale = np.random.uniform(
-            scale_range[0], scale_range[1], (num_to_augment, X.shape[1], X.shape[2])
-        )
-        shift = np.random.uniform(
-            shift_range[0], shift_range[1], (num_to_augment, X.shape[1], X.shape[2])
-        )
-
-        X[indices_to_augment] = X[indices_to_augment] * scale + noise + shift
-        print(
-            f"Data augmented progressively with noise, scaling, and shifting for {num_to_augment} samples."
-        )
-        return X
-
+        
     def prepare_data(self):
         if os.path.exists(self.data_pickle_path):
             print(f"Loading prepared data from {self.data_pickle_path}")
@@ -266,51 +187,52 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
 
 
 
-# set the model name 
-model_name = "rnn_lstm_multifeature_generic"
+if __name__ == "__main__":
+    # set the model name 
+    model_name = "rnn_lstm_multifeature_generic"
 
-# Get the directory of the current script
-script_dir = os.path.dirname(os.path.abspath(__file__))
+    # Get the directory of the current script
+    script_dir = os.path.dirname(os.path.abspath(__file__))
 
-# Paths with the script directory as the base
-data_path = os.path.join(
-    script_dir, "..", "RML2016.10a_dict.pkl"
-)  # One level up from the script's directory
-model_path = os.path.join(script_dir, "models", f"{model_name}.keras")
-stats_path = os.path.join(script_dir, "stats", f"{model_path}_stats.json")
+    # Paths with the script directory as the base
+    data_path = os.path.join(
+        script_dir, "..", "RML2016.10a_dict.pkl"
+    )  # One level up from the script's directory
+    model_path = os.path.join(script_dir, "models", f"{model_name}.keras")
+    stats_path = os.path.join(script_dir, "stats", f"{model_path}_stats.json")
 
-# Usage Example
-print("Data path:", data_path)
-print("Model path:", model_path)
-print("Stats path:", stats_path)
+    # Usage Example
+    print("Data path:", data_path)
+    print("Model path:", model_path)
+    print("Stats path:", stats_path)
 
 
-# Initialize the classifier
-classifier = ModulationLSTMClassifier(data_path, model_path, stats_path)
+    # Initialize the classifier
+    classifier = ModulationLSTMClassifier(data_path, model_path, stats_path)
 
-# Load the dataset
-classifier.load_data()
+    # Load the dataset
+    classifier.load_data()
 
-# Prepare the data
-X_train, X_test, y_train, y_test = classifier.prepare_data()
+    # Prepare the data
+    X_train, X_test, y_train, y_test = classifier.prepare_data()
 
-# Build the LSTM model (load if it exists)
-input_shape = (
-    X_train.shape[1],
-    X_train.shape[2],
-)  # Time steps and features (with SNR as additional feature)
-num_classes = len(np.unique(y_train))  # Number of unique modulation types
-classifier.build_model(input_shape, num_classes)
+    # Build the LSTM model (load if it exists)
+    input_shape = (
+        X_train.shape[1],
+        X_train.shape[2],
+    )  # Time steps and features (with SNR as additional feature)
+    num_classes = len(np.unique(y_train))  # Number of unique modulation types
+    classifier.build_model(input_shape, num_classes)
 
-# Train continuously with cyclical learning rates
-classifier.train_continuously(
-    X_train, y_train, X_test, y_test, batch_size=64, use_clr=True, clr_step_size=10
-)
+    # Train continuously with cyclical learning rates
+    classifier.train_continuously(
+        X_train, y_train, X_test, y_test, batch_size=64, use_clr=True, clr_step_size=10
+    )
 
-# Evaluate the model
-classifier.evaluate(X_test, y_test)
+    # Evaluate the model
+    classifier.evaluate(X_test, y_test)
 
-# Optional: Make predictions on the test set
-predictions = classifier.predict(X_test)
-print("Predicted Labels: ", predictions[:5])
-print("True Labels: ", classifier.label_encoder.inverse_transform(y_test[:5]))
+    # Optional: Make predictions on the test set
+    predictions = classifier.predict(X_test)
+    print("Predicted Labels: ", predictions[:5])
+    print("True Labels: ", classifier.label_encoder.inverse_transform(y_test[:5]))
