@@ -64,11 +64,11 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
             self.model = Sequential(
                 [
                     LSTM(128, input_shape=input_shape, return_sequences=True),
-                    Dropout(0.2),
+                    Dropout(0.5),
                     LSTM(128, return_sequences=False),
                     Dropout(0.2),
                     Dense(128, activation="relu"),
-                    Dropout(0.2),
+                    Dropout(0.1),
                     Dense(num_classes, activation="softmax"),
                 ]
             )
@@ -162,7 +162,7 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
         print(f"Learning rate set to: {self.learning_rate}")
 
 # set the model name 
-model_name = "rnn_lstm_w_SNR"
+model_name = "rnn_lstm_w_SNR_5_2_1"
 
 # Get the directory of the current script
 script_dir = os.path.dirname(os.path.abspath(__file__))
