@@ -153,15 +153,6 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
         self.model = new_model
         print(f"Updated Dropout layers to {new_dropout_rate} and recompiled the model.")
 
-    def set_learning_rate(self, new_lr):
-        """
-        Update the learning rate for the model.
-        """
-        self.learning_rate = new_lr
-        optimizer = Adam(learning_rate=self.learning_rate)
-        self.model.compile(optimizer=optimizer, loss='sparse_categorical_crossentropy', metrics=['accuracy'])
-        print(f"Learning rate set to: {self.learning_rate}")
-
 # set the model name 
 model_name = "rnn_lstm_w_SNR_5_2_1"
 
