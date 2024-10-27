@@ -101,12 +101,13 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
             )
             callbacks.append(clr_scheduler)
 
-        for epoch in range(epochs):
-            X_train_augmented = augment_data_progressive(X_train.copy(), epoch, epochs)
+        stats_interval = 5
+        for epoch in range(epochs//stats_interval):
+            # X_train_augmented = augment_data_progressive(X_train.copy(), epoch, epochs)
             history = self.model.fit(
-                X_train_augmented,
+                X_train,
                 y_train,
-                epochs=1,
+                epochs=stats_interval,
                 batch_size=batch_size,
                 validation_data=(X_test, y_test),
                 callbacks=callbacks,
