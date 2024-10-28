@@ -34,7 +34,7 @@ from SignalUtils import (
     cyclical_lr
 )
 from BaseModulationClassifier import BaseModulationClassifier
-
+from CustomEarlyStopping import CustomEarlyStopping
 # decrease debug messages
 tf.get_logger().setLevel("ERROR")
 
@@ -79,10 +79,11 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
         use_clr=False,
         clr_step_size=10,
     ):
-        early_stopping = EarlyStopping(
-            monitor="val_loss", patience=5, restore_best_weights=True
-        )
-        callbacks = [early_stopping]
+        early_stopping_custom = CustomEarlyStopping(monitor="val_accuracy", min_delta=0.01, patience=5, restore_best_weights=True)
+
+        # Add it to the list of callbacks
+        callbacks = [early_stopping_custom]
+
 
         if use_clr:
             clr_scheduler = LearningRateScheduler(
@@ -188,12 +189,8 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
         return X_train, X_test, y_train, y_test
 
 
-
-if __name__ == "__main__":
-    # set the model name 
-    model_name = "rnn_lstm_multifeature_generic"
-
-    # Get the directory of the current script
+def main(model_name):
+      # Get the directory of the current script
     script_dir = os.path.dirname(os.path.abspath(__file__))
 
     # Paths with the script directory as the base
@@ -238,3 +235,7 @@ if __name__ == "__main__":
     predictions = classifier.predict(X_test)
     print("Predicted Labels: ", predictions[:5])
     print("True Labels: ", classifier.label_encoder.inverse_transform(y_test[:5]))
+
+
+if __name__ == "__main__":
+    main(model_name="rnn_lstm_multifeature_generic_5_2_1")

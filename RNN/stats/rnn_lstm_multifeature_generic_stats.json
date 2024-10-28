@@ -1,7 +1,7 @@
 {
     "date_created": "2024-10-24 20:49:13",
-    "epochs_trained": 3343,
-    "best_accuracy": 0.5317954421043396,
-    "current_accuracy": 0.5317954421043396,
-    "last_trained": "2024-10-27 15:47:48"
+    "epochs_trained": 3763,
+    "best_accuracy": 0.550136387348175,
+    "current_accuracy": 0.5386363863945007,
+    "last_trained": "2024-10-27 21:42:37"
 }
