@@ -142,10 +142,6 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
         use_clr=False,
         clr_step_size=10,
     ):
-        # early_stopping = EarlyStopping(
-        #     monitor="val_loss", patience=5, restore_best_weights=True
-        # )
-        # callbacks = [early_stopping]
         # Define the custom early stopping callback
         early_stopping_custom = CustomEarlyStopping(monitor="val_accuracy", min_delta=0.01, patience=5, restore_best_weights=True)
 
@@ -176,40 +172,6 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
             self.update_and_save_stats(current_accuracy)
 
         return history
-
-    def update_model_dropout(self, new_dropout_rate=0.3):
-        model_config = self.model.get_config()
-        new_model = Sequential()
-
-        for layer in model_config["layers"]:
-            layer_type = layer["class_name"]
-            if layer_type == "LSTM":
-                new_model.add(
-                    LSTM(
-                        units=layer["config"]["units"],
-                        input_shape=layer["config"]["batch_input_shape"][1:],
-                        return_sequences=layer["config"]["return_sequences"],
-                    )
-                )
-            elif layer_type == "Dense":
-                new_model.add(
-                    Dense(
-                        units=layer["config"]["units"],
-                        activation=layer["config"]["activation"],
-                    )
-                )
-            elif layer_type == "Dropout":
-                new_model.add(Dropout(rate=new_dropout_rate))
-
-        optimizer = Adam(learning_rate=self.learning_rate)
-        new_model.compile(
-            loss="sparse_categorical_crossentropy",
-            optimizer=optimizer,
-            metrics=["accuracy"],
-        )
-        new_model.set_weights(self.model.get_weights())
-        self.model = new_model
-        print(f"Updated Dropout layers to {new_dropout_rate} and recompiled the model.")
 
 # set the model name 
 model_name = "rnn_lstm_w_SNR_5_2_1"
