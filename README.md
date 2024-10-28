@@ -19,9 +19,13 @@ https://www.tensorflow.org/install/source#gpu
 I'm using these versions:
 
 tensorflow-2.12.0
+
 Python 3.10	
+
 cuDNN 8.6
+
 CUDA 11.8
+
 
 # Model Statistics Summary
 Confusion matrixes coming soon
