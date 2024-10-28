@@ -11,6 +11,9 @@ Extract the dataset and it will be loaded on startup
 # What does the SW do?
 After the application starts, it will create a model if one isn't present, train it, validate it, then save itself for next run
 
+Look under the RNN folder for two models I'm experimenting with
+
+
 # GPU Information
 To use with a GPU:
 https://www.tensorflow.org/install/source#gpu
