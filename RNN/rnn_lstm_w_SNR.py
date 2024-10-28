@@ -208,9 +208,6 @@ input_shape = (
 num_classes = len(np.unique(y_train))  # Number of unique modulation types
 classifier.build_model(input_shape, num_classes)
 
-# Set the learning rate
-classifier.set_learning_rate(1e-4)
-
 # Train continuously with cyclical learning rates
 classifier.train_continuously(
     X_train, y_train, X_test, y_test, batch_size=64, use_clr=True, clr_step_size=10
