@@ -68,44 +68,46 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
                 metrics=["accuracy"],
             )
 
-    def train(self, X_train, y_train, X_test, y_test, epochs=20, batch_size=64, use_clr=False, clr_step_size=10, augment_data=False):
-        early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
+    def train(
+        self,
+        X_train,
+        y_train,
+        X_test,
+        y_test,
+        epochs=20,
+        batch_size=64,
+        use_clr=False,
+        clr_step_size=10,
+    ):
+        early_stopping = EarlyStopping(
+            monitor="val_loss", patience=5, restore_best_weights=True
+        )
         callbacks = [early_stopping]
-        
-        if use_clr:
-            clr_scheduler = LearningRateScheduler(lambda epoch: cyclical_lr(epoch, step_size=clr_step_size))
-            callbacks.append(clr_scheduler)
-        
-        for epoch in range(epochs):
-            print(f"\nEpoch {epoch + 1}/{epochs}")
-            if augment_data:
-                X_train_augmented = augment_data_progressive(X_train.copy(), epoch, epochs)
-                history = self.model.fit(X_train_augmented, y_train, epochs=1, batch_size=batch_size, validation_data=(X_test, y_test), callbacks=callbacks)
-            else:
-                history = self.model.fit(X_train, y_train, epochs=1, batch_size=batch_size, validation_data=(X_test, y_test), callbacks=callbacks)
-            
-            current_accuracy = max(history.history['val_accuracy'])
-            self.update_and_save_stats(current_accuracy)
-                
-        return history
-    
-    def update_and_save_stats(self, current_accuracy):
-        """
-        Updates stats and saves the model if the current accuracy is better than the best accuracy.
-        """
-        self.stats["current_accuracy"] = current_accuracy
 
-        if current_accuracy > self.stats["best_accuracy"]:
-            print(f"New best accuracy: {current_accuracy}. Saving model...")
-            self.stats["best_accuracy"] = current_accuracy
-            self.save_model()
-        else:
-            print(
-                f"Current accuracy {current_accuracy} did not improve from best accuracy {self.stats['best_accuracy']}. Skipping model save."
+        if use_clr:
+            clr_scheduler = LearningRateScheduler(
+                lambda epoch: cyclical_lr(epoch, step_size=clr_step_size)
+            )
+            callbacks.append(clr_scheduler)
+
+        stats_interval = 5
+        for epoch in range(epochs//stats_interval):
+            # X_train_augmented = augment_data_progressive(X_train.copy(), epoch, epochs)
+            history = self.model.fit(
+                X_train,
+                y_train,
+                epochs=stats_interval,
+                batch_size=batch_size,
+                validation_data=(X_test, y_test),
+                callbacks=callbacks,
             )
 
-        self.stats["last_trained"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        self.save_stats()
+            self.update_epoch_stats(epochs)
+            current_accuracy = max(history.history["val_accuracy"])
+            self.update_and_save_stats(current_accuracy)
+
+        return history
+    
         
     def prepare_data(self):
         if os.path.exists(self.data_pickle_path):
