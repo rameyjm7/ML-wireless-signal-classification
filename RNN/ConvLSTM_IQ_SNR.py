@@ -15,24 +15,11 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 from BaseModulationClassifier import BaseModulationClassifier
 
-from tensorflow.keras.callbacks import (
-    ReduceLROnPlateau,
-    EarlyStopping,
-    LearningRateScheduler,
-)
-from CustomEarlyStopping import CustomEarlyStopping
+from tensorflow.keras.layers import Conv1D, MaxPooling1D
 
-
-from SignalUtils import augment_data_progressive, cyclical_lr
-
-
-class ModulationLSTMClassifier(BaseModulationClassifier):
-    def __init__(
-        self, data_path, model_path="saved_model.h5", stats_path="model_stats.json"
-    ):
-        super().__init__(
-            data_path, model_path, stats_path
-        )  # Call the base class constructor
+class ModulationConvLSTMClassifier(BaseModulationClassifier):
+    def __init__(self, data_path, model_path="saved_model.h5", stats_path="model_stats.json"):
+        super().__init__(data_path, model_path, stats_path)
         self.learning_rate = 0.0001  # Default learning rate
 
     def prepare_data(self):
@@ -40,9 +27,10 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
 
         for (mod_type, snr), signals in self.data.items():
             for signal in signals:
-                iq_signal = np.vstack([signal[0], signal[1]]).T
+                # Perform a 128-point FFT on each signal
+                iq_signal = np.fft.fft(signal[0] + 1j * signal[1], n=128).real  # Use real part for Conv1D
                 snr_signal = np.full((128, 1), snr)
-                combined_signal = np.hstack([iq_signal, snr_signal])
+                combined_signal = np.hstack([iq_signal.reshape(-1, 1), snr_signal])
                 X.append(combined_signal)
                 y.append(mod_type)
 
@@ -59,78 +47,33 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
 
         return X_train, X_test, y_train, y_test
 
-
-
     def build_model(self, input_shape, num_classes):
         if os.path.exists(self.model_path):
             print(f"Loading existing model from {self.model_path}")
             self.model = load_model(self.model_path)
         else:
-            print(f"Building new ConvLSTM model")
-
-            # Build the model using ConvLSTM2D
-            self.model = Sequential([
-                ConvLSTM2D(filters=64, kernel_size=(3, 3), input_shape=input_shape, padding='same', return_sequences=True),
-                Dropout(0.3),
-                ConvLSTM2D(filters=64, kernel_size=(3, 3), padding='same', return_sequences=True),
-                Dropout(0.3),
-                ConvLSTM2D(filters=128, kernel_size=(3, 3), padding='same', return_sequences=False),
-                Dropout(0.3),
-                Conv2D(filters=64, kernel_size=(3, 3), activation='relu', padding='same'),
-                MaxPooling2D(pool_size=(2, 2)),
-                Flatten(),
-                Dense(128, activation='relu'),
-                Dropout(0.2),
-                Dense(num_classes, activation='softmax')
-            ])
-
+            print(f"Building new model with Conv1D and LSTM layers")
+            self.model = Sequential(
+                [
+                    Conv1D(filters=64, kernel_size=3, activation='relu', input_shape=input_shape),
+                    MaxPooling1D(pool_size=2),
+                    LSTM(128, return_sequences=True),
+                    Dropout(0.5),
+                    LSTM(128, return_sequences=False),
+                    Dropout(0.2),
+                    Dense(128, activation="relu"),
+                    Dropout(0.1),
+                    Dense(num_classes, activation="softmax"),
+                ]
+            )
             optimizer = Adam(learning_rate=self.learning_rate)
             self.model.compile(
                 loss="sparse_categorical_crossentropy",
                 optimizer=optimizer,
-                metrics=["accuracy"]
+                metrics=["accuracy"],
             )
 
-    def train(
-        self,
-        X_train,
-        y_train,
-        X_test,
-        y_test,
-        epochs=20,
-        batch_size=64,
-        use_clr=False,
-        clr_step_size=10,
-    ):
-        # Define the custom early stopping callback
-        early_stopping_custom = CustomEarlyStopping(monitor="val_accuracy", min_delta=0.01, patience=5, restore_best_weights=True)
 
-        # Add it to the list of callbacks
-        callbacks = [early_stopping_custom]
-
-
-        if use_clr:
-            clr_scheduler = LearningRateScheduler(
-                lambda epoch: cyclical_lr(epoch, step_size=clr_step_size)
-            )
-            callbacks.append(clr_scheduler)
-
-        stats_interval = 5
-        for epoch in range(epochs//stats_interval):
-            # X_train_augmented = augment_data_progressive(X_train.copy(), epoch, epochs)
-            history = self.model.fit(
-                X_train,
-                y_train,
-                epochs=stats_interval,
-                batch_size=batch_size,
-                validation_data=(X_test, y_test),
-                callbacks=callbacks,
-            )
-            self.update_epoch_stats(epochs)
-            current_accuracy = max(history.history["val_accuracy"])
-            self.update_and_save_stats(current_accuracy)
-
-        return history
 
 
 def main(model_name):
@@ -150,7 +93,7 @@ def main(model_name):
     print("Stats path:", stats_path)
 
     # Initialize the classifier
-    classifier = ModulationLSTMClassifier(data_path, model_path, stats_path)
+    classifier = ModulationConvLSTMClassifier(data_path, model_path, stats_path)
 
     # Load the dataset
     classifier.load_data()
