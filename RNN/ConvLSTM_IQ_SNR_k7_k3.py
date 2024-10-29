@@ -1,21 +1,13 @@
 import os
-import ctypes
-import json
-from datetime import datetime
-import pickle
 import numpy as np
 import tensorflow as tf
-from tensorflow.keras.optimizers import Adam, SGD
-from tensorflow.keras.models import Sequential, load_model
-from tensorflow.keras.layers import LSTM, Dense, Dropout
-from tensorflow.keras.layers import ConvLSTM2D, Conv2D, MaxPooling2D, Flatten
-from CommonVars import common_vars
-
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.models import Model, load_model
+from tensorflow.keras.layers import Input, Conv1D, MaxPooling1D, LSTM, Dense, Dropout, Concatenate, Flatten
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 from BaseModulationClassifier import BaseModulationClassifier
 
-from tensorflow.keras.layers import Conv1D, MaxPooling1D
 
 class ModulationConvLSTMClassifier(BaseModulationClassifier):
     def __init__(self, data_path, model_path="saved_model.h5", stats_path="model_stats.json"):
@@ -52,20 +44,37 @@ class ModulationConvLSTMClassifier(BaseModulationClassifier):
             print(f"Loading existing model from {self.model_path}")
             self.model = load_model(self.model_path)
         else:
-            print(f"Building new model with Conv1D and LSTM layers")
-            self.model = Sequential(
-                [
-                    Conv1D(filters=64, kernel_size=7, activation='relu', input_shape=input_shape),
-                    MaxPooling1D(pool_size=2),
-                    LSTM(128, return_sequences=True),
-                    Dropout(0.5),
-                    LSTM(128, return_sequences=False),
-                    Dropout(0.2),
-                    Dense(128, activation="relu"),
-                    Dropout(0.1),
-                    Dense(num_classes, activation="softmax"),
-                ]
-            )
+            print(f"Building new model with parallel Conv1D and LSTM layers")
+
+            # Input layer
+            inputs = Input(shape=input_shape)
+
+            # Parallel Conv1D layers with kernel sizes 7 and 3
+            conv_7 = Conv1D(filters=64, kernel_size=7, activation='relu', padding='same')(inputs)
+            conv_3 = Conv1D(filters=64, kernel_size=3, activation='relu', padding='same')(inputs)
+
+            # Pooling layers
+            pool_7 = MaxPooling1D(pool_size=2)(conv_7)
+            pool_3 = MaxPooling1D(pool_size=2)(conv_3)
+
+            # Concatenate the outputs from both parallel layers
+            concatenated = Concatenate()([pool_7, pool_3])
+
+            # LSTM layers
+            lstm_1 = LSTM(128, return_sequences=True)(concatenated)
+            dropout_1 = Dropout(0.5)(lstm_1)
+            lstm_2 = LSTM(128, return_sequences=False)(dropout_1)
+            dropout_2 = Dropout(0.2)(lstm_2)
+
+            # Fully connected dense layers
+            dense_1 = Dense(128, activation="relu")(dropout_2)
+            dropout_3 = Dropout(0.1)(dense_1)
+            outputs = Dense(num_classes, activation="softmax")(dropout_3)
+
+            # Create the model
+            self.model = Model(inputs=inputs, outputs=outputs)
+
+            # Compile the model
             optimizer = Adam(learning_rate=self.learning_rate)
             self.model.compile(
                 loss="sparse_categorical_crossentropy",
@@ -74,26 +83,14 @@ class ModulationConvLSTMClassifier(BaseModulationClassifier):
             )
 
 
-
-
 def main(model_name):
     # Get the directory of the current script
     script_dir = os.path.dirname(os.path.abspath(__file__))
 
     # Paths with the script directory as the base
-    data_path = os.path.join(
-        script_dir, "..", "RML2016.10a_dict.pkl"
-    )  # One level up from the script's directory
-    
-    common_vars.stats_dir = os.path.join(script_dir, "stats")
-    common_vars.models_dir = os.path.join(script_dir, "models")
+    data_path = os.path.join(script_dir, "..", "RML2016.10a_dict.pkl")
     model_path = os.path.join(script_dir, "models", f"{model_name}.keras")
     stats_path = os.path.join(script_dir, "stats", f"{model_name}_stats.json")
-
-    # Usage Example
-    print("Data path:", data_path)
-    print("Model path:", model_path)
-    print("Stats path:", stats_path)
 
     # Initialize the classifier
     classifier = ModulationConvLSTMClassifier(data_path, model_path, stats_path)
@@ -104,12 +101,9 @@ def main(model_name):
     # Prepare the data
     X_train, X_test, y_train, y_test = classifier.prepare_data()
 
-    # Build the LSTM model (load if it exists)
-    input_shape = (
-        X_train.shape[1],
-        X_train.shape[2],
-    )  # Time steps and features (with SNR as additional feature)
-    num_classes = len(np.unique(y_train))  # Number of unique modulation types
+    # Build the Conv1D + LSTM model (load if it exists)
+    input_shape = (X_train.shape[1], X_train.shape[2])
+    num_classes = len(np.unique(y_train))
     classifier.build_model(input_shape, num_classes)
 
     # Train continuously with cyclical learning rates
@@ -127,6 +121,6 @@ def main(model_name):
 
 
 if __name__ == "__main__":
-    # set the model name 
-    model_name = "ConvLSTM_IQ_SNR_k7"
+    # Set the model name
+    model_name = "ConvLSTM_IQ_SNR_k7_k3"
     main(model_name)
