@@ -12,6 +12,8 @@ import tensorflow as tf
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.models import Sequential, load_model
 from tensorflow.keras.layers import LSTM, Dense, Dropout
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+import matplotlib.pyplot as plt
 from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import train_test_split
 from tensorflow.keras.callbacks import (
@@ -20,6 +22,8 @@ from tensorflow.keras.callbacks import (
     LearningRateScheduler,
 )
 from scipy.signal import hilbert
+from SignalUtils import cyclical_lr
+from CommonVars import common_vars
 
 
 # Base Abstract Class
@@ -99,7 +103,7 @@ class BaseModulationClassifier(ABC):
         # Add Cyclical Learning Rate (CLR) if requested
         if use_clr:
             clr_scheduler = LearningRateScheduler(
-                lambda epoch: self.cyclical_lr(epoch, step_size=clr_step_size)
+                lambda epoch: cyclical_lr(epoch, step_size=clr_step_size)
             )
             callbacks.append(clr_scheduler)
 
@@ -176,7 +180,33 @@ class BaseModulationClassifier(ABC):
     def evaluate(self, X_test, y_test):
         test_loss, test_acc = self.model.evaluate(X_test, y_test)
         print(f"Test Accuracy: {test_acc * 100:.2f}%")
+
+        # Generate predictions and save confusion matrix
+        y_pred = self.model.predict(X_test)
+        y_pred_classes = np.argmax(y_pred, axis=1)
+        self.save_confusion_matrix(y_test, y_pred_classes)
+
         return test_acc
+
+    def save_confusion_matrix(self, y_true, y_pred):
+        """Generates and saves a confusion matrix plot for the model's predictions."""
+        conf_matrix = confusion_matrix(y_true, y_pred)
+        disp = ConfusionMatrixDisplay(
+            confusion_matrix=conf_matrix, display_labels=self.label_encoder.classes_
+        )
+
+        # Plot and save confusion matrix
+        fig, ax = plt.subplots(figsize=(10, 10))
+        disp.plot(cmap=plt.cm.Blues, ax=ax, colorbar=False)
+        plt.title(f"Confusion Matrix - {os.path.basename(self.model_path)}")
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        save_path = os.path.join(
+            common_vars.stats_dir,
+            "confusion_matrix",
+            f"{os.path.basename(self.model_path)}_conf_matrix_{timestamp}.png",
+        )
+        plt.savefig(save_path)
+        print(f"Confusion matrix saved to {save_path}")
 
     def predict(self, X):
         predictions = self.model.predict(X)

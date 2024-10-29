@@ -20,7 +20,7 @@ from tensorflow.keras.callbacks import (
 )
 from CustomEarlyStopping import CustomEarlyStopping
 
-
+from CommonVars import common_vars
 from SignalUtils import augment_data_progressive, cyclical_lr
 
 
@@ -133,6 +133,9 @@ def main(model_name):
     data_path = os.path.join(
         script_dir, "..", "RML2016.10a_dict.pkl"
     )  # One level up from the script's directory
+    
+    common_vars.stats_dir = os.path.join(script_dir, "stats")
+    common_vars.models_dir = os.path.join(script_dir, "models")
     model_path = os.path.join(script_dir, "models", f"{model_name}.keras")
     stats_path = os.path.join(script_dir, "stats", f"{model_name}_stats.json")
 
@@ -158,10 +161,10 @@ def main(model_name):
     num_classes = len(np.unique(y_train))  # Number of unique modulation types
     classifier.build_model(input_shape, num_classes)
 
-    # Train continuously with cyclical learning rates
-    classifier.train_continuously(
-        X_train, y_train, X_test, y_test, batch_size=64, use_clr=True, clr_step_size=10
-    )
+    # # Train continuously with cyclical learning rates
+    # classifier.train_continuously(
+    #     X_train, y_train, X_test, y_test, batch_size=64, use_clr=True, clr_step_size=10
+    # )
 
     # Evaluate the model
     classifier.evaluate(X_test, y_test)
