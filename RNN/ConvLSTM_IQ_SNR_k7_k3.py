@@ -109,7 +109,7 @@ def main(model_name):
     # Train continuously with cyclical learning rates
     classifier.train_continuously(
         X_train, y_train, X_test, y_test, batch_size=64, use_clr=True, clr_step_size=10
-    )
+    )   
 
     # Evaluate the model
     classifier.evaluate(X_test, y_test)
