@@ -44,25 +44,6 @@ from CustomEarlyStopping import CustomEarlyStopping
 tf.get_logger().setLevel("ERROR")
 
 
-def compute_fft_features(signal):
-    # Perform 128-point FFT on the signal
-    fft_result = np.fft.fft(signal, n=128)
-    power_spectrum = np.abs(fft_result) ** 2  # Power spectrum of the FFT result
-
-    # Calculate additional frequency-domain features
-    avg_power = np.mean(power_spectrum)
-    peak_power = np.max(power_spectrum)
-    std_dev_power = np.std(power_spectrum)
-
-    return power_spectrum, avg_power, std_dev_power, peak_power
-
-
-# Child class inheriting from the abstract class, implementing `prepare_data`
-class ModulationLSTMClassifier(BaseModulationClassifier):
-    def __init__(
-        self, data_path, model_path="saved_model.h5", stats_path="model_stats.json"
-    ):
-        super().__init__(data_path, model_path, stats_path)
 
 
 class ModulationLSTMClassifier(BaseModulationClassifier):
@@ -70,15 +51,19 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
         self, data_path, model_path="saved_model.h5", stats_path="model_stats.json"
     ):
         super().__init__(data_path, model_path, stats_path)
+        
+    def compute_fft_features(self, signal):
+        # Perform 128-point FFT on the signal
+        fft_result = np.fft.fft(signal, n=128)
+        power_spectrum = np.abs(fft_result) ** 2  # Power spectrum of the FFT result
 
+        # Calculate additional frequency-domain features
+        avg_power = np.mean(power_spectrum)
+        peak_power = np.max(power_spectrum)
+        std_dev_power = np.std(power_spectrum)
 
-    def cyclical_lr(self, epoch, base_lr=1e-7, max_lr=1e-6, step_size=10):
-        cycle = np.floor(1 + epoch / (2 * step_size))
-        x = np.abs(epoch / step_size - 2 * cycle + 1)
-        lr = base_lr + (max_lr - base_lr) * max(0, (1 - x))
-        print(f"Learning rate for epoch {epoch+1}: {lr}")
-        return lr
-
+        return power_spectrum, avg_power, std_dev_power, peak_power
+    
     def build_model(self, input_shape, num_classes):
         if os.path.exists(self.model_path):
             print(f"Loading existing model from {self.model_path}")
@@ -154,7 +139,7 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
 
                 # Compute FFT features
                 power_spectrum, avg_power, std_dev_power, peak_power = (
-                    compute_fft_features(signal[0] + 1j * signal[1])
+                    self.compute_fft_features(signal[0] + 1j * signal[1])
                 )
 
                 # Ensure shapes for concatenation
@@ -199,51 +184,6 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
         print(f"Prepared data saved to {self.data_pickle_path}")
 
         return X_train, X_test, y_train, y_test
-
-    def train(
-        self,
-        X_train,
-        y_train,
-        X_test,
-        y_test,
-        epochs=20,
-        batch_size=64,
-        use_clr=False,
-        clr_step_size=10,
-    ):
-        early_stopping_custom = CustomEarlyStopping(
-            monitor="val_accuracy",
-            min_delta=0.01,
-            patience=5,
-            restore_best_weights=True,
-        )
-
-        # Add it to the list of callbacks
-        callbacks = [early_stopping_custom]
-
-        if use_clr:
-            clr_scheduler = LearningRateScheduler(
-                lambda epoch: self.cyclical_lr(epoch, step_size=clr_step_size)
-            )
-            callbacks.append(clr_scheduler)
-
-        stats_interval = 20
-        for epoch in range(epochs // stats_interval):
-            # X_train_augmented = augment_data_progressive(X_train.copy(), epoch, epochs)
-            history = self.model.fit(
-                X_train,
-                y_train,
-                epochs=stats_interval,
-                batch_size=batch_size,
-                validation_data=(X_test, y_test),
-                callbacks=callbacks,
-            )
-
-            self.update_epoch_stats(epochs)
-            current_accuracy = max(history.history["val_accuracy"])
-            self.update_and_save_stats(current_accuracy)
-
-        return history
 
     def cyclical_lr(self, epoch, base_lr=1e-7, max_lr=1e-6, step_size=10):
         cycle = np.floor(1 + epoch / (2 * step_size))

@@ -24,6 +24,7 @@ from tensorflow.keras.callbacks import (
 from scipy.signal import hilbert
 from SignalUtils import cyclical_lr
 from CommonVars import common_vars
+from CustomEarlyStopping import CustomEarlyStopping
 
 
 # Base Abstract Class
@@ -90,53 +91,41 @@ class BaseModulationClassifier(ABC):
         y_train,
         X_test,
         y_test,
-        epochs=10,
+        epochs=20,
         batch_size=64,
         use_clr=False,
         clr_step_size=10,
     ):
-        early_stopping = EarlyStopping(
-            monitor="val_loss", patience=5, restore_best_weights=True
-        )
-        callbacks = [early_stopping]
+        early_stopping_custom = CustomEarlyStopping(monitor="val_accuracy", min_delta=0.01, patience=5, restore_best_weights=True)
 
-        # Add Cyclical Learning Rate (CLR) if requested
+        # Add it to the list of callbacks
+        callbacks = [early_stopping_custom]
+
+
         if use_clr:
             clr_scheduler = LearningRateScheduler(
-                lambda epoch: self.cyclical_lr()
+                lambda epoch: self.cyclical_lr(epoch, step_size=clr_step_size)
             )
             callbacks.append(clr_scheduler)
 
-        history = self.model.fit(
-            X_train,
-            y_train,
-            epochs=epochs,
-            batch_size=batch_size,
-            validation_data=(X_test, y_test),
-            callbacks=callbacks,
-        )
-
-        # Update total number of epochs trained
-        self.stats["epochs_trained"] += epochs
-        self.stats["last_trained"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        current_accuracy = max(history.history["val_accuracy"])
-        self.stats["current_accuracy"] = current_accuracy
-
-        # Check if current accuracy is better than best_accuracy
-        if current_accuracy > self.stats["best_accuracy"]:
-            print(f"New best accuracy: {current_accuracy}. Saving model...")
-            self.stats["best_accuracy"] = current_accuracy
-            # Save the model if the accuracy improved
-            self.save_model()
-        else:
-            print(
-                f"Current accuracy {current_accuracy} did not improve from best accuracy {self.stats['best_accuracy']}. Skipping model save."
+        stats_interval = 20
+        for epoch in range(epochs//stats_interval):
+            # X_train_augmented = augment_data_progressive(X_train.copy(), epoch, epochs)
+            history = self.model.fit(
+                X_train,
+                y_train,
+                epochs=stats_interval,
+                batch_size=batch_size,
+                validation_data=(X_test, y_test),
+                callbacks=callbacks,
             )
 
-        # Save the updated stats
-        self.save_stats()
+            self.update_epoch_stats(epochs)
+            current_accuracy = max(history.history["val_accuracy"])
+            self.update_and_save_stats(current_accuracy)
 
         return history
+
 
     def cyclical_lr(self, epoch, base_lr=1e-6, max_lr=1e-3, step_size=10):
         cycle = np.floor(1 + epoch / (2 * step_size))

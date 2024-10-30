@@ -34,45 +34,28 @@ from SignalUtils import (
     cyclical_lr
 )
 from BaseModulationClassifier import BaseModulationClassifier
-from CustomEarlyStopping import CustomEarlyStopping
 # decrease debug messages
 tf.get_logger().setLevel("ERROR")
 
 
-def compute_fft_features(signal):
-    # Perform 128-point FFT on the signal
-    fft_result = np.fft.fft(signal, n=128)
-    power_spectrum = np.abs(fft_result) ** 2  # Power spectrum of the FFT result
-
-    # Calculate additional frequency-domain features
-    avg_power = np.mean(power_spectrum)
-    peak_power = np.max(power_spectrum)
-    std_dev_power = np.std(power_spectrum)
-
-    return power_spectrum, avg_power, std_dev_power, peak_power
-
-
-# Child class inheriting from the abstract class, implementing `prepare_data`
-class ModulationLSTMClassifier(BaseModulationClassifier):
-    def __init__(
-        self, data_path, model_path="saved_model.h5", stats_path="model_stats.json"
-    ):
-        super().__init__(data_path, model_path, stats_path)
-
-from tensorflow.keras.models import Sequential, load_model
-from tensorflow.keras.layers import LSTM, Dense, Dropout
-from tensorflow.keras.optimizers import Adam
-from sklearn.preprocessing import LabelEncoder
-from sklearn.model_selection import train_test_split
-import numpy as np
-import os
-import pickle
 
 class ModulationLSTMClassifier(BaseModulationClassifier):
     def __init__(
         self, data_path, model_path="saved_model.h5", stats_path="model_stats.json"
     ):
         super().__init__(data_path, model_path, stats_path)
+        
+    def compute_fft_features(self, signal):
+        # Perform 128-point FFT on the signal
+        fft_result = np.fft.fft(signal, n=128)
+        power_spectrum = np.abs(fft_result) ** 2  # Power spectrum of the FFT result
+
+        # Calculate additional frequency-domain features
+        avg_power = np.mean(power_spectrum)
+        peak_power = np.max(power_spectrum)
+        std_dev_power = np.std(power_spectrum)
+
+        return power_spectrum, avg_power, std_dev_power, peak_power
 
     # Function to build the new model based on input shape
     def build_model(self, input_shape, num_classes):
@@ -114,7 +97,7 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
                 iq_signal = np.vstack([signal[0], signal[1]]).T
 
                 # Compute FFT features
-                power_spectrum, avg_power, std_dev_power, peak_power = compute_fft_features(signal[0] + 1j * signal[1])
+                power_spectrum, avg_power, std_dev_power, peak_power = self.compute_fft_features(signal[0] + 1j * signal[1])
 
                 # Ensure shapes for concatenation
                 power_spectrum = power_spectrum[:128].reshape(128, 1)  # Limit to 128 and reshape to (128, 1)
@@ -149,46 +132,6 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
 
         return X_train, X_test, y_train, y_test
 
-    def train(
-        self,
-        X_train,
-        y_train,
-        X_test,
-        y_test,
-        epochs=20,
-        batch_size=64,
-        use_clr=False,
-        clr_step_size=10,
-    ):
-        early_stopping_custom = CustomEarlyStopping(monitor="val_accuracy", min_delta=0.01, patience=5, restore_best_weights=True)
-
-        # Add it to the list of callbacks
-        callbacks = [early_stopping_custom]
-
-
-        if use_clr:
-            clr_scheduler = LearningRateScheduler(
-                lambda epoch: cyclical_lr(epoch, step_size=clr_step_size)
-            )
-            callbacks.append(clr_scheduler)
-
-        stats_interval = 20
-        for epoch in range(epochs//stats_interval):
-            # X_train_augmented = augment_data_progressive(X_train.copy(), epoch, epochs)
-            history = self.model.fit(
-                X_train,
-                y_train,
-                epochs=stats_interval,
-                batch_size=batch_size,
-                validation_data=(X_test, y_test),
-                callbacks=callbacks,
-            )
-
-            self.update_epoch_stats(epochs)
-            current_accuracy = max(history.history["val_accuracy"])
-            self.update_and_save_stats(current_accuracy)
-
-        return history
 
 
 
