@@ -103,7 +103,7 @@ class BaseModulationClassifier(ABC):
         # Add Cyclical Learning Rate (CLR) if requested
         if use_clr:
             clr_scheduler = LearningRateScheduler(
-                lambda epoch: cyclical_lr(epoch, step_size=clr_step_size)
+                lambda epoch: self.cyclical_lr()
             )
             callbacks.append(clr_scheduler)
 
@@ -137,6 +137,14 @@ class BaseModulationClassifier(ABC):
         self.save_stats()
 
         return history
+
+    def cyclical_lr(self, epoch, base_lr=1e-6, max_lr=1e-3, step_size=10):
+        cycle = np.floor(1 + epoch / (2 * step_size))
+        x = np.abs(epoch / step_size - 2 * cycle + 1)
+        lr = base_lr + (max_lr - base_lr) * max(0, (1 - x))
+        print(f"Learning rate for epoch {epoch+1}: {lr}")
+        return lr
+
 
     def train_continuously(
         self,
