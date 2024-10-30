@@ -177,5 +177,5 @@ def main(model_name):
 
 if __name__ == "__main__":
     # set the model name 
-    model_name = "rnn_lstm_w_SNR_5_2_1"
+    model_name = "rnn_lstm_w_SNR"
     main(model_name)
