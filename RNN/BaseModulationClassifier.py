@@ -200,10 +200,11 @@ class BaseModulationClassifier(ABC):
         disp.plot(cmap=plt.cm.Blues, ax=ax, colorbar=False)
         plt.title(f"Confusion Matrix - {os.path.basename(self.model_path)}")
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        model_name = os.path.basename(self.model_path).split(".")[0]
         save_path = os.path.join(
             common_vars.stats_dir,
             "confusion_matrix",
-            f"{os.path.basename(self.model_path)}_conf_matrix_{timestamp}.png",
+            f"CM_{model_name}.png",
         )
         plt.savefig(save_path)
         print(f"Confusion matrix saved to {save_path}")
