@@ -34,10 +34,8 @@ from SignalUtils import (
     compute_spectral_energy_concentration,
     compute_zero_crossing_rate,
     compute_instantaneous_frequency_jitter,
-    # compute_fft_features,
     compute_instantaneous_features,
     augment_data_progressive,
-    cyclical_lr,
 )
 from BaseModulationClassifier import BaseModulationClassifier
 from CustomEarlyStopping import CustomEarlyStopping
@@ -225,7 +223,7 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
 
         if use_clr:
             clr_scheduler = LearningRateScheduler(
-                lambda epoch: cyclical_lr(epoch, step_size=clr_step_size)
+                lambda epoch: self.cyclical_lr(epoch, step_size=clr_step_size)
             )
             callbacks.append(clr_scheduler)
 
@@ -246,6 +244,13 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
             self.update_and_save_stats(current_accuracy)
 
         return history
+
+    def cyclical_lr(self, epoch, base_lr=1e-7, max_lr=1e-6, step_size=10):
+        cycle = np.floor(1 + epoch / (2 * step_size))
+        x = np.abs(epoch / step_size - 2 * cycle + 1)
+        lr = base_lr + (max_lr - base_lr) * max(0, (1 - x))
+        print(f"Learning rate for epoch {epoch+1}: {lr}")
+        return lr
 
 
 def main(model_name):
