@@ -9,9 +9,33 @@ Download the RADIOML 2016.10A dataset from this link https://www.deepsig.ai/data
 Extract the dataset and it will be loaded on startup
 
 # What does the SW do?
+
+Its a python module with different machine learning models, statistics, and generic code for training and evaluation. 
+
+To install the module and run the code:
+
+
+// Install python3 virtual env
+apt install python3-venv
+
+// install virtual env somewhere
+python3 -m venv /home/eng/python
+
+// source the environment
+source /home/eng/python/bin/activate
+
+// install the module from the base of the repository
+pip3 install -e . 
+
+// run the module
+python3 -m ml_wireless_classification
+
+
+
+
 After the application starts, it will create a model if one isn't present, train it, validate it, then save itself for next run
 
-Look under the RNN folder for two models I'm experimenting with
+Look under the src/ml_wireless_classification/ folder for two models I'm experimenting with
 
 
 # GPU Information
