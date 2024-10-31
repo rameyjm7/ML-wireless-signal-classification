@@ -237,6 +237,9 @@ def main(model_name, make_new_dropout_model=False):
 
 
 if __name__ == "__main__":
+    # set the model name 
+    model_name = "rnn_lstm_w_SNR"
+    main(model_name)
     # set the model name
     model_name = "rnn_lstm_w_SNR_5_2_1"
     main(model_name, False)
