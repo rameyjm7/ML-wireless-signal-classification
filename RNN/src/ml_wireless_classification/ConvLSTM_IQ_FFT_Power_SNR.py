@@ -26,7 +26,7 @@ from tensorflow.keras.callbacks import (
 )
 
 
-from SignalUtils import (
+from ml_wireless_classification.base.SignalUtils import (
     autocorrelation,
     is_digital_signal,
     compute_kurtosis,
@@ -37,8 +37,8 @@ from SignalUtils import (
     compute_instantaneous_features,
     augment_data_progressive,
 )
-from BaseModulationClassifier import BaseModulationClassifier
-from CustomEarlyStopping import CustomEarlyStopping
+from ml_wireless_classification.base.BaseModulationClassifier import BaseModulationClassifier
+from ml_wireless_classification.base.CustomEarlyStopping import CustomEarlyStopping
 
 # decrease debug messages
 tf.get_logger().setLevel("ERROR")

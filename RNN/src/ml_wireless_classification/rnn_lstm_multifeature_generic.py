@@ -20,7 +20,7 @@ from tensorflow.keras.callbacks import (
     LearningRateScheduler,
 )
 
-from SignalUtils import (
+from RNN.base.SignalUtils import (
     autocorrelation,
     is_digital_signal,
     compute_kurtosis,
@@ -33,8 +33,8 @@ from SignalUtils import (
     augment_data_progressive,
     cyclical_lr
 )
-from BaseModulationClassifier import BaseModulationClassifier
-from CustomEarlyStopping import CustomEarlyStopping
+from ml_wireless_classification.base.BaseModulationClassifier import BaseModulationClassifier
+from ml_wireless_classification.base.CustomEarlyStopping import CustomEarlyStopping
 # decrease debug messages
 tf.get_logger().setLevel("ERROR")
 
