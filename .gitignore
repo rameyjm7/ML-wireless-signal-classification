@@ -3,3 +3,5 @@ dataset
 *.keras_data.pkl
 RML2016.10a.tar.bz2
 *.pyc
+src/ml_wireless_classification.egg-info
+src/ml_wireless_classification/__pycache__
