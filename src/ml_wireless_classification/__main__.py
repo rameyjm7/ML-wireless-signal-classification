@@ -12,7 +12,7 @@ def main(model_name, data_path = None):
 
     # Paths with the script directory as the base
     if not data_path:
-        data_path = os.path.join(script_dir, "..", "..", "..", "RML2016.10a_dict.pkl")  # One level up from the script's directory
+        data_path = os.path.join(script_dir, "..", "..", "RML2016.10a_dict.pkl")  # One level up from the script's directory
     else:
         # allow updating path
         print(f"data path set to {data_path})")
