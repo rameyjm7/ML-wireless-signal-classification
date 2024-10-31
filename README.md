@@ -77,6 +77,8 @@ This table summarizes statistics for all models found
 | rnn_lstm_multifeature_generic_stats       | 2024-10-24 20:49:13 |             3763 |        0.550136 |           0.538636 | 2024-10-27 21:42:37 |
 | rnn_lstm_multifeature_generic_w_fft_stats | 2024-10-25 21:57:40 |              880 |        0.517455 |           0.515477 | 2024-10-26 11:55:08 |
 
+![image](https://github.com/user-attachments/assets/481af949-8fe2-4a9b-9ded-9e58efd70595)
+
 
 # References
 
