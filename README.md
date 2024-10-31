@@ -16,18 +16,23 @@ To install the module and run the code:
 
 
 // Install python3 virtual env
+
 apt install python3-venv
 
 // install virtual env somewhere
+
 python3 -m venv /home/eng/python
 
 // source the environment
+
 source /home/eng/python/bin/activate
 
 // install the module from the base of the repository
+
 pip3 install -e . 
 
 // run the module
+
 python3 -m ml_wireless_classification
 
 
