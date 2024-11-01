@@ -21,6 +21,7 @@ class ModulationConvLSTMClassifier(BaseModulationClassifier):
     def __init__(self, data_path, model_path="saved_model.h5", stats_path="model_stats.json"):
         super().__init__(data_path, model_path, stats_path)
         self.learning_rate = 0.0001  # Default learning rate
+        self.name = "ConvLSTM_IQ_SNR_k7"
 
     def prepare_data(self):
         X, y = [], []
@@ -73,60 +74,3 @@ class ModulationConvLSTMClassifier(BaseModulationClassifier):
                 metrics=["accuracy"],
             )
 
-
-
-
-def main(model_name):
-    # Get the directory of the current script
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-
-    # Paths with the script directory as the base
-    data_path = os.path.join(
-        script_dir, "..", "RML2016.10a_dict.pkl"
-    )  # One level up from the script's directory
-    
-    common_vars.stats_dir = os.path.join(script_dir, "stats")
-    common_vars.models_dir = os.path.join(script_dir, "models")
-    model_path = os.path.join(script_dir, "models", f"{model_name}.keras")
-    stats_path = os.path.join(script_dir, "stats", f"{model_name}_stats.json")
-
-    # Usage Example
-    print("Data path:", data_path)
-    print("Model path:", model_path)
-    print("Stats path:", stats_path)
-
-    # Initialize the classifier
-    classifier = ModulationConvLSTMClassifier(data_path, model_path, stats_path)
-
-    # Load the dataset
-    classifier.load_data()
-
-    # Prepare the data
-    X_train, X_test, y_train, y_test = classifier.prepare_data()
-
-    # Build the LSTM model (load if it exists)
-    input_shape = (
-        X_train.shape[1],
-        X_train.shape[2],
-    )  # Time steps and features (with SNR as additional feature)
-    num_classes = len(np.unique(y_train))  # Number of unique modulation types
-    classifier.build_model(input_shape, num_classes)
-
-    # Train continuously with cyclical learning rates
-    classifier.train_continuously(
-        X_train, y_train, X_test, y_test, batch_size=64, use_clr=True, clr_step_size=10
-    )
-
-    # Evaluate the model
-    classifier.evaluate(X_test, y_test)
-
-    # Optional: Make predictions on the test set
-    predictions = classifier.predict(X_test)
-    print("Predicted Labels: ", predictions[:5])
-    print("True Labels: ", classifier.label_encoder.inverse_transform(y_test[:5]))
-
-
-if __name__ == "__main__":
-    # set the model name 
-    model_name = "ConvLSTM_IQ_SNR_k7"
-    main(model_name)

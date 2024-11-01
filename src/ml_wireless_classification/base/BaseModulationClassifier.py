@@ -10,7 +10,7 @@ import numpy as np
 import pickle
 import tensorflow as tf
 from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.models import Sequential, load_model
+from tensorflow.keras.models import Sequential, load_model, clone_model
 from tensorflow.keras.layers import LSTM, Dense, Dropout
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 import matplotlib.pyplot as plt
@@ -32,6 +32,7 @@ class BaseModulationClassifier(ABC):
     def __init__(
         self, data_path, model_path="saved_model.h5", stats_path="model_stats.json"
     ):
+        self.name = ""
         self.data_path = data_path
         self.model_path = model_path
         self.stats_path = stats_path
@@ -50,6 +51,7 @@ class BaseModulationClassifier(ABC):
         }
         self.learning_rate = 0.0001  # Default learning rate
         self.load_stats()
+        
 
     def load_stats(self):
         if os.path.exists(self.stats_path):
@@ -96,10 +98,11 @@ class BaseModulationClassifier(ABC):
         use_clr=False,
         clr_step_size=10,
     ):
-        early_stopping_custom = CustomEarlyStopping(monitor="val_accuracy", min_delta=0.01, patience=5, restore_best_weights=True)
+        # early_stopping_custom = CustomEarlyStopping(monitor="val_accuracy", min_delta=0.01, patience=5, restore_best_weights=True)
 
         # Add it to the list of callbacks
-        callbacks = [early_stopping_custom]
+        # callbacks = [early_stopping_custom]
+        callbacks = []
 
 
         if use_clr:
@@ -127,7 +130,7 @@ class BaseModulationClassifier(ABC):
         return history
 
 
-    def cyclical_lr(self, epoch, base_lr=1e-6, max_lr=1e-3, step_size=10):
+    def cyclical_lr(self, epoch, base_lr=1e-7, max_lr=1e-4, step_size=10):
         cycle = np.floor(1 + epoch / (2 * step_size))
         x = np.abs(epoch / step_size - 2 * cycle + 1)
         lr = base_lr + (max_lr - base_lr) * max(0, (1 - x))
@@ -232,3 +235,26 @@ class BaseModulationClassifier(ABC):
             )
 
         self.save_stats()
+
+    def transfer_model_with_dropout_adjustment(self, original_model, new_model_name, dropout_rates=(0.5, 0.2, 0.1)):
+        """
+        Transfers weights from the original model to a new model with updated dropout rates.
+        """
+        # Clone the structure of the original model
+        new_model = clone_model(original_model)
+        new_model.set_weights(original_model.get_weights())  # Set original weights
+        
+        # Modify dropout rates
+        for layer, rate in zip(new_model.layers, dropout_rates):
+            if isinstance(layer, tf.keras.layers.Dropout):
+                layer.rate = rate
+        
+        # Compile the new model with the same optimizer and loss as the original
+        new_model.compile(optimizer=Adam(learning_rate=1e-6),
+                        loss="sparse_categorical_crossentropy",
+                        metrics=["accuracy"])
+        
+        # Save new model
+        new_model.save(new_model_name)
+        print(f"New model saved as {new_model_name} with dropout rates: {dropout_rates}")
+        return new_model
