@@ -9,7 +9,7 @@ from sklearn.preprocessing import LabelEncoder
 from ml_wireless_classification.base.BaseModulationClassifier import BaseModulationClassifier
 
 
-class ModulationConvLSTMClassifier(BaseModulationClassifier):
+class ModulationLSTMClassifier(BaseModulationClassifier):
     def __init__(self, data_path, model_path="saved_model.h5", stats_path="model_stats.json"):
         super().__init__(data_path, model_path, stats_path)
         self.learning_rate = 0.0001  # Default learning rate

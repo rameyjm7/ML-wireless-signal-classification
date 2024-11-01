@@ -8,7 +8,7 @@ from ml_wireless_classification.base.CommonVars import common_vars
 from ml_wireless_classification.GenericModulationClassifier import GenericModulationClassifier
 
 
-def main(model_name, data_path=None, make_new_dropout_model=False):
+def main(model_name, train = True, data_path=None, make_new_dropout_model=False):
     # Get the directory of the current script
     script_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -65,15 +65,17 @@ def main(model_name, data_path=None, make_new_dropout_model=False):
         )
         return 0
 
-    # Train continuously with cyclical learning rates
-    classifier.train_continuously(
-        X_train, y_train, X_test, y_test, batch_size=64, use_clr=True, clr_step_size=10
-    )
+    # allow to skip training if we only want to evaluate
+    if train:
+        # Train continuously with cyclical learning rates
+        classifier.train_continuously(
+            X_train, y_train, X_test, y_test, batch_size=64, use_clr=True, clr_step_size=10
+        )
 
     # Evaluate the model
     classifier.evaluate(X_test, y_test)
 
-    # Optional: Make predictions on the test set
+    #  Make predictions on the test set
     predictions = classifier.predict(X_test)
     print("Predicted Labels: ", predictions[:5])
     print("True Labels: ", classifier.label_encoder.inverse_transform(y_test[:5]))
@@ -84,11 +86,9 @@ if __name__ == "__main__":
     RML2016_data_pkl_path = "/home/dev/workspace/ML-wireless-signal-classification/RNN/src/ml_wireless_classification/../RML2016.10a_dict.pkl"
     models = [
         "rnn_lstm_w_SNR",
-        "rnn_lstm_w_SNR_5_2_1",
         "rnn_lstm_multifeature_generic",   # this model needs to be regenerated
         "ConvLSTM_FFT_Power_SNR",
-        "ConvLSTM_IQ_SNR_k7_k3",
-        "ConvLSTM_IQ_SNR_k7",
+        "ConvLSTM_IQ_SNR",
     ]
-    model_name = models[2]
-    main(model_name, None, False)
+    model_name = models[1]
+    main(model_name, True, None, False)

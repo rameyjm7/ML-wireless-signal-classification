@@ -32,7 +32,7 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
             data_path, model_path, stats_path
         )  # Call the base class constructor
         self.learning_rate = 0.0001  # Default learning rate
-        self.name = "rnn_lstm_w_SNR_5_2_1"
+        self.name = "rnn_lstm_w_SNR"
 
     def prepare_data(self):
         X, y = [], []
@@ -67,11 +67,11 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
             self.model = Sequential(
                 [
                     LSTM(128, input_shape=input_shape, return_sequences=True),
-                    Dropout(0.25),
+                    Dropout(0.2),
                     LSTM(128, return_sequences=False),
-                    Dropout(0.25),
+                    Dropout(0.2),
                     Dense(128, activation="relu"),
-                    Dropout(0.25),
+                    Dropout(0.2),
                     Dense(num_classes, activation="softmax"),
                 ]
             )
