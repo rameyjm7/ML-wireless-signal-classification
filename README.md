@@ -80,6 +80,14 @@ This table summarizes statistics for all models found
 ![image](https://github.com/user-attachments/assets/481af949-8fe2-4a9b-9ded-9e58efd70595)
 
 
+# Troubleshooting
+If you see this error message:
+ImportError: /home/dev/python/lib/python3.8/site-packages/sklearn/__check_build/../../scikit_learn.libs/libgomp-d22c30c5.so.1.0.0: cannot allocate memory in static TLS block
+
+the fix for me is to run export LD_PRELOAD=/home/dev/python/lib/python3.8/site-packages/sklearn/__check_build/../../scikit_learn.libs/libgomp-d22c30c5.so.1.0.0
+
+this way the library is loaded before python loads scikit-learn
+
 # References
 
 https://github.com/radioML
