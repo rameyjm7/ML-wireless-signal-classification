@@ -24,6 +24,7 @@ from ml_wireless_classification.base.CommonVars import common_vars
 from ml_wireless_classification.base.SignalUtils import augment_data_progressive, cyclical_lr
 
 
+
 class ModulationLSTMClassifier(BaseModulationClassifier):
     def __init__(
         self, data_path, model_path="saved_model.h5", stats_path="model_stats.json"
@@ -67,11 +68,11 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
             self.model = Sequential(
                 [
                     LSTM(128, input_shape=input_shape, return_sequences=True),
-                    Dropout(0.2),
+                    Dropout(0.5),
                     LSTM(128, return_sequences=False),
                     Dropout(0.2),
                     Dense(128, activation="relu"),
-                    Dropout(0.2),
+                    Dropout(0.1),
                     Dense(num_classes, activation="softmax"),
                 ]
             )
@@ -127,3 +128,29 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
             self.update_and_save_stats(current_accuracy)
 
         return history
+
+
+if __name__ == "__main__":
+    # set the model name
+    model_name = "rnn_lstm_w_SNR_0.5_0.2_0.1"
+    # Get the directory of the current script
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+
+    data_path = os.path.join(
+        script_dir, "..", "..", "RML2016.10a_dict.pkl"
+    )  # One level up from the script's directory
+
+    common_vars.stats_dir = os.path.join(script_dir, "stats")
+    common_vars.models_dir = os.path.join(script_dir, "models")
+    model_path = os.path.join(script_dir, "models", f"{model_name}.keras")
+    stats_path = os.path.join(script_dir, "stats", f"{model_name}_stats.json")
+
+    # Usage Example
+    print("Data path:", data_path)
+    print("Model path:", model_path)
+    print("Stats path:", stats_path)
+
+    # Initialize the classifier
+    classifier = ModulationLSTMClassifier(data_path, model_path, stats_path)
+    # classifier.change_dropout_test()
+    classifier.main()

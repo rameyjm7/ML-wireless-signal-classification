@@ -7,11 +7,14 @@ import gc
 import json
 from datetime import datetime
 import numpy as np
+import subprocess
 import pickle
+import threading
 import tensorflow as tf
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.models import Sequential, load_model, clone_model
 from tensorflow.keras.layers import LSTM, Dense, Dropout
+from tensorflow.keras.utils import plot_model
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import LabelEncoder
@@ -21,10 +24,13 @@ from tensorflow.keras.callbacks import (
     EarlyStopping,
     LearningRateScheduler,
 )
+from tensorflow.keras.callbacks import TensorBoard
+
 from scipy.signal import hilbert
 from ml_wireless_classification.base.SignalUtils import cyclical_lr
 from ml_wireless_classification.base.CommonVars import common_vars
 from ml_wireless_classification.base.CustomEarlyStopping import CustomEarlyStopping
+
 
 
 # Base Abstract Class
@@ -51,7 +57,7 @@ class BaseModulationClassifier(ABC):
         }
         self.learning_rate = 0.0001  # Default learning rate
         self.load_stats()
-        
+        self.log_dir = "logs/fit/" + datetime.now().strftime("%Y%m%d-%H%M%S")
 
     def load_stats(self):
         if os.path.exists(self.stats_path):
@@ -83,9 +89,34 @@ class BaseModulationClassifier(ABC):
         self.model.save(mpath, save_format="keras")
         print(f"Model saved to {mpath}")
 
-    @abstractmethod
+        # Start TensorBoard in a background thread
+    def start_tensorboard(self):
+        print("Starting TensorBoard...")
+        subprocess.run(["tensorboard", "--logdir", self.log_dir, "--host=0.0.0.0", "--port=6006"])
+
     def build_model(self, input_shape, num_classes):
-        pass
+        if os.path.exists(self.model_path):
+            print(f"Loading existing model from {self.model_path}")
+            self.model = load_model(self.model_path)
+        else:
+            print(f"Building new model")
+            self.model = Sequential(
+                [
+                    LSTM(128, input_shape=input_shape, return_sequences=True),
+                    Dropout(0.5),
+                    LSTM(128, return_sequences=False),
+                    Dropout(0.2),
+                    Dense(128, activation="relu"),
+                    Dropout(0.1),
+                    Dense(num_classes, activation="softmax"),
+                ]
+            )
+            optimizer = Adam(learning_rate=self.learning_rate)
+            self.model.compile(
+                loss="sparse_categorical_crossentropy",
+                optimizer=optimizer,
+                metrics=["accuracy"],
+            )
 
     def train(
         self,
@@ -95,15 +126,20 @@ class BaseModulationClassifier(ABC):
         y_test,
         epochs=20,
         batch_size=64,
-        use_clr=False,
+        use_clr=True,
         clr_step_size=10,
     ):
-        # early_stopping_custom = CustomEarlyStopping(monitor="val_accuracy", min_delta=0.01, patience=5, restore_best_weights=True)
+        early_stopping_custom = CustomEarlyStopping(
+            monitor="val_accuracy",
+            min_delta=0.01,
+            patience=5,
+            restore_best_weights=True,
+        )
 
-        # Add it to the list of callbacks
-        # callbacks = [early_stopping_custom]
-        callbacks = []
+        
+        tensorboard_callback = TensorBoard(log_dir=self.log_dir, histogram_freq=1)
 
+        callbacks = [early_stopping_custom, tensorboard_callback]
 
         if use_clr:
             clr_scheduler = LearningRateScheduler(
@@ -111,8 +147,8 @@ class BaseModulationClassifier(ABC):
             )
             callbacks.append(clr_scheduler)
 
-        stats_interval = 20
-        for epoch in range(epochs//stats_interval):
+        stats_interval = 5
+        for epoch in range(epochs // stats_interval):
             # X_train_augmented = augment_data_progressive(X_train.copy(), epoch, epochs)
             history = self.model.fit(
                 X_train,
@@ -129,14 +165,12 @@ class BaseModulationClassifier(ABC):
 
         return history
 
-
     def cyclical_lr(self, epoch, base_lr=1e-7, max_lr=1e-4, step_size=10):
         cycle = np.floor(1 + epoch / (2 * step_size))
         x = np.abs(epoch / step_size - 2 * cycle + 1)
         lr = base_lr + (max_lr - base_lr) * max(0, (1 - x))
         print(f"Learning rate for epoch {epoch+1}: {lr}")
         return lr
-
 
     def train_continuously(
         self,
@@ -188,6 +222,9 @@ class BaseModulationClassifier(ABC):
 
         return test_acc
 
+    def get_model_name(self):
+        return os.path.basename(self.model_path).split(".")[0]
+
     def save_confusion_matrix(self, y_true, y_pred):
         """Generates and saves a confusion matrix plot for the model's predictions."""
         conf_matrix = confusion_matrix(y_true, y_pred)
@@ -200,7 +237,7 @@ class BaseModulationClassifier(ABC):
         disp.plot(cmap=plt.cm.Blues, ax=ax, colorbar=False)
         plt.title(f"Confusion Matrix - {os.path.basename(self.model_path)}")
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        model_name = os.path.basename(self.model_path).split(".")[0]
+        model_name = self.get_model_name()
         save_path = os.path.join(
             common_vars.stats_dir,
             "confusion_matrix",
@@ -236,25 +273,59 @@ class BaseModulationClassifier(ABC):
 
         self.save_stats()
 
-    def transfer_model_with_dropout_adjustment(self, original_model, new_model_name, dropout_rates=(0.5, 0.2, 0.1)):
-        """
-        Transfers weights from the original model to a new model with updated dropout rates.
-        """
-        # Clone the structure of the original model
-        new_model = clone_model(original_model)
-        new_model.set_weights(original_model.get_weights())  # Set original weights
-        
-        # Modify dropout rates
-        for layer, rate in zip(new_model.layers, dropout_rates):
-            if isinstance(layer, tf.keras.layers.Dropout):
-                layer.rate = rate
-        
-        # Compile the new model with the same optimizer and loss as the original
-        new_model.compile(optimizer=Adam(learning_rate=1e-6),
-                        loss="sparse_categorical_crossentropy",
-                        metrics=["accuracy"])
-        
-        # Save new model
-        new_model.save(new_model_name)
-        print(f"New model saved as {new_model_name} with dropout rates: {dropout_rates}")
-        return new_model
+    def setup(self):
+        # Load the dataset
+        self.load_data()
+
+        # Prepare the data
+        X_train, X_test, y_train, y_test = self.prepare_data()
+
+        # Build the model (load if it exists)
+        input_shape = (
+            X_train.shape[1],
+            X_train.shape[2],
+        )  # Time steps and features (I, Q, SNR, BW)
+        num_classes = len(np.unique(y_train))  # Number of unique modulation types
+        self.build_model(input_shape, num_classes)
+        model_plot_path = os.path.join(
+            common_vars.models_dir, "plots", f"{self.get_model_name()}.png"
+        )
+
+        # plot_model(
+        #     self.model,
+        #     to_file=model_plot_path,
+        #     show_shapes=True,
+        #     show_layer_names=True,
+        # )
+
+        return X_train, y_train, X_test, y_test
+
+    def main(self, train=True):
+        X_train, y_train, X_test, y_test = self.setup()
+
+
+        # Start TensorBoard in a new thread after training is complete
+        tensorboard_thread = threading.Thread(target=self.start_tensorboard)
+        tensorboard_thread.daemon = True  # Daemonize thread to close with the main program
+        tensorboard_thread.start()
+
+        # allow to skip training if we only want to evaluate
+        if train:
+            # Train continuously with cyclical learning rates
+            self.train_continuously(
+                X_train,
+                y_train,
+                X_test,
+                y_test,
+                batch_size=64,
+                use_clr=True,
+                clr_step_size=10,
+            )
+
+        # Evaluate the model
+        self.evaluate(X_test, y_test)
+
+        #  Make predictions on the test set
+        predictions = self.predict(X_test)
+        print("Predicted Labels: ", predictions[:5])
+        print("True Labels: ", self.label_encoder.inverse_transform(y_test[:5]))
