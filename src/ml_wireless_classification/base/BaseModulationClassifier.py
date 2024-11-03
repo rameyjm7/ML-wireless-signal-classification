@@ -147,7 +147,7 @@ class BaseModulationClassifier(ABC):
             )
             callbacks.append(clr_scheduler)
 
-        stats_interval = 5
+        stats_interval = 20
         for epoch in range(epochs // stats_interval):
             # X_train_augmented = augment_data_progressive(X_train.copy(), epoch, epochs)
             history = self.model.fit(
@@ -165,7 +165,7 @@ class BaseModulationClassifier(ABC):
 
         return history
 
-    def cyclical_lr(self, epoch, base_lr=1e-7, max_lr=1e-4, step_size=10):
+    def cyclical_lr(self, epoch, base_lr=1e-7, max_lr=1e-5, step_size=10):
         cycle = np.floor(1 + epoch / (2 * step_size))
         x = np.abs(epoch / step_size - 2 * cycle + 1)
         lr = base_lr + (max_lr - base_lr) * max(0, (1 - x))

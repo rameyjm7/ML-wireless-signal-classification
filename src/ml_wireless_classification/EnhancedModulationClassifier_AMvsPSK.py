@@ -63,6 +63,12 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
         for (mod_type, snr), signals in self.data.items():
             for signal in signals:
                 iq_signal = signal[0] + 1j * signal[1]  # Convert to complex form
+                
+                # Normalize the IQ data
+                max_value = np.max(np.abs(iq_signal))
+                if max_value != 0:
+                    iq_signal /= max_value  # Normalize to [-1, 1]
+                    
                 iq_array = np.vstack([signal[0], signal[1]]).T  # Shape: (128, 2)
 
                 # Calculate the four additional features
