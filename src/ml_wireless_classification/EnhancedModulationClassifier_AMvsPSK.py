@@ -23,6 +23,7 @@ from ml_wireless_classification.base.CustomEarlyStopping import CustomEarlyStopp
 from ml_wireless_classification.base.CommonVars import common_vars
 from ml_wireless_classification.base.SignalUtils import augment_data_progressive, cyclical_lr
 
+from tensorflow.keras.callbacks import TensorBoard
 
 
 class ModulationLSTMClassifier(BaseModulationClassifier):
@@ -100,12 +101,34 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
 
         return X_train, X_test, y_train, y_test
     
-
+    def build_model(self, input_shape, num_classes):
+        if os.path.exists(self.model_path):
+            print(f"Loading existing model from {self.model_path}")
+            self.model = load_model(self.model_path)
+        else:
+            print(f"Building new model")
+            self.model = Sequential(
+                [
+                    LSTM(128, input_shape=input_shape, return_sequences=True),
+                    Dropout(0.2),
+                    LSTM(128, return_sequences=False),
+                    Dropout(0.2),
+                    Dense(128, activation="relu"),
+                    Dropout(0.2),
+                    Dense(num_classes, activation="softmax"),
+                ]
+            )
+            optimizer = Adam(learning_rate=self.learning_rate)
+            self.model.compile(
+                loss="sparse_categorical_crossentropy",
+                optimizer=optimizer,
+                metrics=["accuracy"],
+            )
 
 
 if __name__ == "__main__":
     # set the model name
-    model_name = "EnhancedModulationClassifier_AMvsPSK"
+    model_name = "EnhancedModulationClassifier_AMvsPSK_2_2_2"
     # Get the directory of the current script
     script_dir = os.path.dirname(os.path.abspath(__file__))
 

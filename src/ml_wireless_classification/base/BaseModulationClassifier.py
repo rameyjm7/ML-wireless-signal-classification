@@ -300,6 +300,64 @@ class BaseModulationClassifier(ABC):
 
         return X_train, y_train, X_test, y_test
 
+    def train_with_feature_removal(
+        self,
+        X_train,
+        y_train,
+        X_test,
+        y_test,
+        epochs=20,
+        batch_size=64,
+        use_clr=True,
+        clr_step_size=10,
+    ):
+        feature_names = ["I", "Q", "SNR", "Envelope Variance", "Inst. Freq. Variance", "Phase Jitter", "PAPR"]
+        original_accuracy = 0
+        feature_accuracies = {}
+
+        # Training with all features to get baseline accuracy
+        print("Training with all features...")
+        history = self.train(X_train, y_train, X_test, y_test, epochs, batch_size, use_clr, clr_step_size)
+        original_accuracy = max(history.history["val_accuracy"])
+        print(f"Baseline accuracy with all features: {original_accuracy:.2f}")
+
+        # Loop over each feature, remove it, and train the model
+        for i in range(X_train.shape[2]):  # Loop through each feature dimension
+            print(f"\nTraining without feature: {feature_names[i]}")
+
+            # Remove the feature at index i
+            X_train_reduced = np.delete(X_train, i, axis=2)
+            X_test_reduced = np.delete(X_test, i, axis=2)
+
+            # Rebuild and compile the model to ensure fresh training each time
+            self.build_model(input_shape=(X_train_reduced.shape[1], X_train_reduced.shape[2]), num_classes=len(np.unique(y_train)))
+
+            # Train the model without the selected feature
+            history = self.model.fit(
+                X_train_reduced,
+                y_train,
+                epochs=epochs,
+                batch_size=batch_size,
+                validation_data=(X_test_reduced, y_test),
+                callbacks=[
+                    CustomEarlyStopping(monitor="val_accuracy", min_delta=0.01, patience=5, restore_best_weights=True),
+                    TensorBoard(log_dir=self.log_dir, histogram_freq=1),
+                    LearningRateScheduler(lambda epoch: self.cyclical_lr(epoch, step_size=clr_step_size)) if use_clr else None,
+                ],
+            )
+
+            # Store the accuracy for the feature removed
+            reduced_accuracy = max(history.history["val_accuracy"])
+            feature_accuracies[feature_names[i]] = reduced_accuracy
+            print(f"Accuracy without {feature_names[i]}: {reduced_accuracy:.2f}")
+
+        # Identify the feature whose removal had the smallest impact on accuracy
+        least_useful_feature = min(feature_accuracies, key=lambda k: original_accuracy - feature_accuracies[k])
+        impact = original_accuracy - feature_accuracies[least_useful_feature]
+        print(f"\nLeast useful feature: {least_useful_feature} with accuracy drop of {impact:.2f}")
+
+        return feature_accuracies, least_useful_feature
+
     def main(self, train=True):
         X_train, y_train, X_test, y_test = self.setup()
 
