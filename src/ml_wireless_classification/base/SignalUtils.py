@@ -1,6 +1,6 @@
 import numpy as np
-from scipy.signal import hilbert
-
+from scipy.signal import hilbert, stft
+from scipy.stats import kurtosis, skew
 
 def compute_fft_features(signal):
     fft_result = np.fft.fft(signal)
@@ -145,3 +145,57 @@ def cyclical_lr(epoch, base_lr=1e-6, max_lr=1e-3, step_size=10):
     lr = base_lr + (max_lr - base_lr) * max(0, (1 - x))
     print(f"Learning rate for epoch {epoch+1}: {lr}")
     return lr
+
+
+def compute_spectral_kurtosis(signal, fs=1.0, nperseg=128):
+    """
+    Computes the Spectral Kurtosis of a given signal.
+    
+    Parameters:
+    - signal (np.array): The input signal.
+    - fs (float): Sampling frequency of the signal.
+    - nperseg (int): Number of samples per segment for STFT.
+    
+    Returns:
+    - spectral_kurtosis (np.array): The Spectral Kurtosis values across frequencies.
+    """
+    # Compute the Short-Time Fourier Transform (STFT) of the signal
+    f, t, Zxx = stft(signal, fs=fs, nperseg=nperseg)
+    
+    # Calculate the power spectral density
+    power_spectral_density = np.abs(Zxx)**2
+    
+    # Calculate the mean and variance of the power spectral density across time
+    psd_mean = np.mean(power_spectral_density, axis=1)
+    psd_variance = np.var(power_spectral_density, axis=1)
+    
+    # Compute Spectral Kurtosis
+    spectral_kurtosis = psd_variance / (psd_mean ** 2) - 1
+    
+    return spectral_kurtosis
+
+
+def compute_higher_order_cumulants(signal, order=4):
+    """
+    Computes the higher-order cumulants (up to fourth-order by default) of the input signal.
+    
+    Parameters:
+    - signal (np.array): The input signal (real or complex).
+    - order (int): The order of the cumulant (default is 4 for kurtosis).
+    
+    Returns:
+    - cumulant (float): The cumulant value for the given order.
+    """
+    if order == 2:
+        # Second-order cumulant is simply the variance
+        cumulant = np.var(signal)
+    elif order == 3:
+        # Third-order cumulant is skewness
+        cumulant = skew(signal)
+    elif order == 4:
+        # Fourth-order cumulant is kurtosis (excess kurtosis)
+        cumulant = kurtosis(signal, fisher=False)  # Using population kurtosis
+    else:
+        raise ValueError("Currently, only cumulants up to order 4 are supported.")
+    
+    return cumulant

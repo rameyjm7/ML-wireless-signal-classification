@@ -165,7 +165,7 @@ class BaseModulationClassifier(ABC):
 
         return history
 
-    def cyclical_lr(self, epoch, base_lr=1e-7, max_lr=1e-5, step_size=10):
+    def cyclical_lr(self, epoch, base_lr=1e-5, max_lr=1e-2, step_size=10):
         cycle = np.floor(1 + epoch / (2 * step_size))
         x = np.abs(epoch / step_size - 2 * cycle + 1)
         lr = base_lr + (max_lr - base_lr) * max(0, (1 - x))
