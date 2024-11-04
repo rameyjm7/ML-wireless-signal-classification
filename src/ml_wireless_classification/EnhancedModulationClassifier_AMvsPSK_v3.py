@@ -69,6 +69,15 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
 
     def prepare_data(self):
         X, y = [], []
+        data_pickle_path = os.path.join(
+            common_vars.data_dir, f"{common_vars.model_name}_data.pkl"
+        )
+        # Check if the data pickle file exists
+        if os.path.exists(data_pickle_path):
+            print(f"Loading prepared data from {data_pickle_path}")
+            with open(data_pickle_path, "rb") as f:
+                X_train, X_test, y_train, y_test = pickle.load(f)
+            return X_train, X_test, y_train, y_test
 
         for (mod_type, snr), signals in self.data.items():
             for signal in signals:
@@ -146,6 +155,12 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
         X_train, X_test, y_train, y_test = train_test_split(
             X, y_encoded, test_size=0.2, random_state=42
         )
+                
+        # Save the prepared data to a pickle file
+        with open(data_pickle_path, "wb") as f:
+            pickle.dump((X_train, X_test, y_train, y_test), f)
+        print(f"Prepared data saved to {data_pickle_path}")
+        
 
         return X_train, X_test, y_train, y_test
 
