@@ -151,7 +151,7 @@ class BaseModulationClassifier(ABC):
         for epoch in range(epochs // stats_interval):
             # X_train_augmented = augment_data_progressive(X_train.copy(), epoch, epochs)
             history = self.model.fit(
-                X_train,
+                np.nan_to_num(X_train, nan=0.0),
                 y_train,
                 epochs=stats_interval,
                 batch_size=batch_size,
@@ -165,7 +165,7 @@ class BaseModulationClassifier(ABC):
 
         return history
 
-    def cyclical_lr(self, epoch, base_lr=1e-5, max_lr=1e-2, step_size=10):
+    def cyclical_lr(self, epoch, base_lr=1e-7, max_lr=1e-5, step_size=10):
         cycle = np.floor(1 + epoch / (2 * step_size))
         x = np.abs(epoch / step_size - 2 * cycle + 1)
         lr = base_lr + (max_lr - base_lr) * max(0, (1 - x))

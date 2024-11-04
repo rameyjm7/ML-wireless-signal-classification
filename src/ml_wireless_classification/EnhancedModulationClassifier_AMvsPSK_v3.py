@@ -72,45 +72,47 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
 
         for (mod_type, snr), signals in self.data.items():
             for signal in signals:
-                iq_signal = signal[0] + 1j * signal[1]  # Convert to complex form
+                # Separate real and imaginary parts for the IQ signal
+                real_signal = signal[0]
+                imag_signal = signal[1]
+                
+                # Normalize each channel separately to the range [-1, 1]
+                max_real = np.max(np.abs(real_signal))
+                max_imag = np.max(np.abs(imag_signal))
+                real_signal = real_signal / max_real if max_real != 0 else real_signal
+                imag_signal = imag_signal / max_imag if max_imag != 0 else imag_signal
+                
+                # Stack the normalized real and imaginary parts to form a (128, 2) array
+                iq_array = np.vstack([real_signal, imag_signal]).T  # Shape: (128, 2)
 
-                # Normalize the IQ data
-                max_value = np.max(np.abs(iq_signal))
-                if max_value != 0:
-                    iq_signal /= max_value  # Normalize to [-1, 1]
-
-                iq_array = np.vstack([signal[0], signal[1]]).T  # Shape: (128, 2)
-
-                # Use compute_features to calculate envelope variance, frequency stability, phase jitter, and PAPR
-                envelope_variance, instantaneous_frequency_variance, phase_jitter, papr = self.compute_features(iq_signal)
+                # Compute additional features using the helper methods
+                envelope_variance, instantaneous_frequency_variance, phase_jitter, papr = self.compute_features(real_signal + 1j * imag_signal)
                 envelope_variance = np.full((128, 1), envelope_variance)
                 instantaneous_frequency_variance = np.full((128, 1), instantaneous_frequency_variance)
                 phase_jitter = np.full((128, 1), phase_jitter)
                 papr = np.full((128, 1), papr)
 
-                # Additional computed features
-                spectral_kurtosis = np.mean(compute_spectral_kurtosis(iq_signal))
-                fourth_order_cumulant = compute_higher_order_cumulants(iq_signal, order=4)
-                spectral_kurtosis = np.nan_to_num(spectral_kurtosis, nan=0.0)
-                fourth_order_cumulant = np.nan_to_num(fourth_order_cumulant, nan=0.0)
-                spectral_kurtosis_repeated = np.full((128, 1), spectral_kurtosis)
-                fourth_order_cumulant_repeated = np.full((128, 1), fourth_order_cumulant)
+                # Compute additional advanced features
+                spectral_kurtosis = np.mean(compute_spectral_kurtosis(real_signal + 1j * imag_signal))
+                # fourth_order_cumulant = compute_higher_order_cumulants(real_signal + 1j * imag_signal, order=4)
+                spectral_kurtosis_repeated = np.full((128, 1), np.nan_to_num(spectral_kurtosis))
+                # fourth_order_cumulant_repeated = np.full((128, 1), np.nan_to_num(fourth_order_cumulant))
 
-                # Calculate FFT-based features
-                center_frequency, peak_power, avg_power, std_dev_power = compute_fft_features(iq_signal)
+                # Compute FFT-based features
+                center_frequency, peak_power, avg_power, std_dev_power = compute_fft_features(real_signal + 1j * imag_signal)
                 center_frequency = np.full((128, 1), center_frequency)
                 peak_power = np.full((128, 1), peak_power)
                 avg_power = np.full((128, 1), avg_power)
                 std_dev_power = np.full((128, 1), std_dev_power)
 
                 # Additional features: Zero-crossing rate, skewness, entropy, flatness, and frequency spread
-                zero_crossing_rate = np.full((128, 1), compute_zero_crossing_rate(iq_signal))
-                skewness = np.full((128, 1), compute_skewness(iq_signal))
-                spectral_entropy = np.full((128, 1), np.mean(-np.log(np.abs(iq_signal) ** 2 + 1e-10) * np.abs(iq_signal) ** 2))
-                spectral_flatness = np.full((128, 1), np.exp(np.mean(np.log(np.abs(iq_signal) ** 2 + 1e-10))) / np.mean(np.abs(iq_signal) ** 2))
-                frequency_spread = np.full((128, 1), np.std(np.diff(np.unwrap(np.angle(iq_signal)))))
+                zero_crossing_rate = np.full((128, 1), compute_zero_crossing_rate(real_signal))
+                skewness = np.full((128, 1), compute_skewness(real_signal))
+                spectral_entropy = np.full((128, 1), np.mean(-np.log(np.abs(real_signal) ** 2 + 1e-10) * np.abs(real_signal) ** 2))
+                spectral_flatness = np.full((128, 1), np.exp(np.mean(np.log(np.abs(real_signal) ** 2 + 1e-10))) / np.mean(np.abs(real_signal) ** 2))
+                frequency_spread = np.full((128, 1), np.std(np.diff(np.unwrap(np.angle(real_signal + 1j * imag_signal)))))
 
-                # Stack IQ data with additional features along with the SNR
+                # Stack IQ data (real and imaginary parts) with additional features and SNR
                 snr_signal = np.full((128, 1), snr)
                 combined_signal = np.hstack([
                     iq_array,
@@ -120,7 +122,6 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
                     phase_jitter,
                     papr,
                     spectral_kurtosis_repeated,
-                    fourth_order_cumulant_repeated,
                     center_frequency,
                     peak_power,
                     avg_power,
@@ -147,6 +148,8 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
         )
 
         return X_train, X_test, y_train, y_test
+
+    
     def build_model(self, input_shape, num_classes):
         if os.path.exists(self.model_path):
             print(f"Loading existing model from {self.model_path}")
@@ -174,7 +177,7 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
 
 if __name__ == "__main__":
     # set the model name
-    model_name = "EnhancedModulationClassifier_AMvsPSK_v2_2_2_2"
+    model_name = "EnhancedModulationClassifier_AMvsPSK_v3_2_2_2"
     # Get the directory of the current script
     script_dir = os.path.dirname(os.path.abspath(__file__))
 
