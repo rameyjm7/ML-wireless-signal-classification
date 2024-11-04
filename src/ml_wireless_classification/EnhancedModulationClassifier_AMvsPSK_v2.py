@@ -65,49 +65,73 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
         return envelope_variance, instantaneous_frequency_variance, phase_jitter, papr
 
     def prepare_data(self):
+        data_pickle_path = os.path.join(
+            common_vars.data_dir, f"{common_vars.model_name}_data.pkl"
+        )
+        # Check if the data pickle file exists
+        if os.path.exists(data_pickle_path):
+            print(f"Loading prepared data from {data_pickle_path}")
+            with open(data_pickle_path, "rb") as f:
+                X_train, X_test, y_train, y_test = pickle.load(f)
+            return X_train, X_test, y_train, y_test
+
+        # Prepare data from scratch if pickle file does not exist
         X, y = [], []
 
         for (mod_type, snr), signals in self.data.items():
             for signal in signals:
                 iq_signal = signal[0] + 1j * signal[1]  # Convert to complex form
-                
+
                 # Normalize the IQ data
                 max_value = np.max(np.abs(iq_signal))
                 if max_value != 0:
                     iq_signal /= max_value  # Normalize to [-1, 1]
-                    
+
                 iq_array = np.vstack([signal[0], signal[1]]).T  # Shape: (128, 2)
 
                 # Calculate the existing additional features
-                envelope_variance, instantaneous_frequency_variance, phase_jitter, papr = self.compute_features(iq_signal)
+                (
+                    envelope_variance,
+                    instantaneous_frequency_variance,
+                    phase_jitter,
+                    papr,
+                ) = self.compute_features(iq_signal)
 
                 # Calculate new additional features
                 spectral_kurtosis = compute_spectral_kurtosis(iq_signal)
-                fourth_order_cumulant = compute_higher_order_cumulants(iq_signal, order=4)
+                fourth_order_cumulant = compute_higher_order_cumulants(
+                    iq_signal, order=4
+                )
 
                 # Ensure the shapes for concatenation
                 envelope_variance = np.full((128, 1), envelope_variance)
-                instantaneous_frequency_variance = np.full((128, 1), instantaneous_frequency_variance)
+                instantaneous_frequency_variance = np.full(
+                    (128, 1), instantaneous_frequency_variance
+                )
                 phase_jitter = np.full((128, 1), phase_jitter)
                 papr = np.full((128, 1), papr)
-                
-                # Reshape the new additional features to match (128, 1)
-                spectral_kurtosis = spectral_kurtosis.reshape(-1, 1)
-                fourth_order_cumulant = np.full((128, 1), fourth_order_cumulant)
+                spectral_kurtosis = np.nan_to_num(np.mean(spectral_kurtosis), nan=0.0)
+                spectral_kurtosis_repeated = np.full((128, 1), spectral_kurtosis)
+                fourth_order_cumulant = np.nan_to_num(fourth_order_cumulant, nan=0.0)
+                fourth_order_cumulant_repeated = np.full(
+                    (128, 1), fourth_order_cumulant
+                )
 
                 # Stack IQ data with additional features along with the SNR
                 snr_signal = np.full((128, 1), snr)
-                combined_signal = np.hstack([
-                    iq_array, 
-                    snr_signal, 
-                    envelope_variance, 
-                    instantaneous_frequency_variance, 
-                    phase_jitter, 
-                    papr, 
-                    spectral_kurtosis, 
-                    fourth_order_cumulant
-                ])
-                
+                combined_signal = np.hstack(
+                    [
+                        iq_array,
+                        snr_signal,
+                        envelope_variance,
+                        instantaneous_frequency_variance,
+                        phase_jitter,
+                        papr,
+                        spectral_kurtosis_repeated,
+                        fourth_order_cumulant_repeated,
+                    ]
+                )
+
                 X.append(combined_signal)
                 y.append(mod_type)
 
@@ -121,6 +145,11 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
         X_train, X_test, y_train, y_test = train_test_split(
             X, y_encoded, test_size=0.2, random_state=42
         )
+
+        # Save the prepared data to a pickle file
+        with open(data_pickle_path, "wb") as f:
+            pickle.dump((X_train, X_test, y_train, y_test), f)
+        print(f"Prepared data saved to {data_pickle_path}")
 
         return X_train, X_test, y_train, y_test
 
@@ -159,7 +188,9 @@ if __name__ == "__main__":
         script_dir, "..", "..", "RML2016.10a_dict.pkl"
     )  # One level up from the script's directory
 
+    common_vars.model_name = model_name
     common_vars.stats_dir = os.path.join(script_dir, "stats")
+    common_vars.data_dir = os.path.join(script_dir, "data")
     common_vars.models_dir = os.path.join(script_dir, "models")
     model_path = os.path.join(script_dir, "models", f"{model_name}.keras")
     stats_path = os.path.join(script_dir, "stats", f"{model_name}_stats.json")
