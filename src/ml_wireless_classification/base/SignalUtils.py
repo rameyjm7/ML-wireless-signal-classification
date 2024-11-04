@@ -197,5 +197,5 @@ def compute_higher_order_cumulants(signal, order=4):
         cumulant = kurtosis(signal, fisher=False)  # Using population kurtosis
     else:
         raise ValueError("Currently, only cumulants up to order 4 are supported.")
-    
+    cumulant = np.nan_to_num(cumulant, nan=0.0, posinf=0.0, neginf=0.0)
     return cumulant
