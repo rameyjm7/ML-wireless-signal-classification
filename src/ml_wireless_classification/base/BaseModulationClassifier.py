@@ -58,6 +58,7 @@ class BaseModulationClassifier(ABC):
         self.learning_rate = 0.0001  # Default learning rate
         self.load_stats()
         self.log_dir = "logs/fit/" + datetime.now().strftime("%Y%m%d-%H%M%S")
+        self.load_data()
 
     def load_stats(self):
         if os.path.exists(self.stats_path):
@@ -165,7 +166,7 @@ class BaseModulationClassifier(ABC):
 
         return history
 
-    def cyclical_lr(self, epoch, base_lr=1e-7, max_lr=1e-5, step_size=10):
+    def cyclical_lr(self, epoch, base_lr=1e-6, max_lr=1e-2, step_size=10):
         cycle = np.floor(1 + epoch / (2 * step_size))
         x = np.abs(epoch / step_size - 2 * cycle + 1)
         lr = base_lr + (max_lr - base_lr) * max(0, (1 - x))
