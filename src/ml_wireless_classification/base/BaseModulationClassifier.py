@@ -11,6 +11,7 @@ import subprocess
 import pickle
 import threading
 import tensorflow as tf
+from sklearn.utils.class_weight import compute_class_weight
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.models import Sequential, load_model, clone_model
 from tensorflow.keras.layers import LSTM, Dense, Dropout
@@ -136,10 +137,7 @@ class BaseModulationClassifier(ABC):
             patience=5,
             restore_best_weights=True,
         )
-
-        
         tensorboard_callback = TensorBoard(log_dir=self.log_dir, histogram_freq=1)
-
         callbacks = [early_stopping_custom, tensorboard_callback]
 
         if use_clr:
@@ -158,6 +156,7 @@ class BaseModulationClassifier(ABC):
                 batch_size=batch_size,
                 validation_data=(X_test, y_test),
                 callbacks=callbacks,
+                class_weight=self.class_weights_dict
             )
 
             self.update_epoch_stats(epochs)
@@ -298,6 +297,13 @@ class BaseModulationClassifier(ABC):
 
         # Prepare the data
         X_train, X_test, y_train, y_test = self.prepare_data()
+        
+        # Calculate class weights
+        class_weights = compute_class_weight(class_weight='balanced', classes=np.unique(y_train), y=y_train)
+        self.class_weights_dict = dict(enumerate(class_weights))
+        # Increase the weight for WBFM by a factor (e.g., 2)
+        focus_factor = 4  # Increase this to focus more on WBFM
+        self.class_weights_dict[10] *= focus_factor
 
         # Build the model (load if it exists)
         input_shape = (
@@ -310,14 +316,14 @@ class BaseModulationClassifier(ABC):
             common_vars.models_dir, "plots", f"{self.get_model_name()}.png"
         )
 
-        # plot_model(
-        #     self.model,
-        #     to_file=model_plot_path,
-        #     show_shapes=True,
-        #     show_layer_names=True,
-        # )
-
+        self.setup_tensorboard()
         return X_train, y_train, X_test, y_test
+
+
+    def setup_tensorboard(self):
+        tensorboard_thread = threading.Thread(target=self.start_tensorboard)
+        tensorboard_thread.daemon = True  # Daemonize thread to close with the main program
+        tensorboard_thread.start()
 
     def train_with_feature_removal(
         self,
@@ -380,12 +386,6 @@ class BaseModulationClassifier(ABC):
     def main(self, train=True):
         X_train, y_train, X_test, y_test = self.setup()
 
-
-        # Start TensorBoard in a new thread after training is complete
-        tensorboard_thread = threading.Thread(target=self.start_tensorboard)
-        tensorboard_thread.daemon = True  # Daemonize thread to close with the main program
-        tensorboard_thread.start()
-
         # allow to skip training if we only want to evaluate
         if train:
             # Train continuously with cyclical learning rates
@@ -406,3 +406,31 @@ class BaseModulationClassifier(ABC):
         predictions = self.predict(X_test)
         print("Predicted Labels: ", predictions[:5])
         print("True Labels: ", self.label_encoder.inverse_transform(y_test[:5]))
+
+    def augment_wbfm_samples(self, X, y, target_class, augmentation_factor=4):
+        # Duplicate WBFM samples and add minor variations
+        wbfm_indices = np.where(y == target_class)[0]
+        augmented_X, augmented_y = [], []
+
+        for idx in wbfm_indices:
+            for _ in range(augmentation_factor):
+                noise = np.random.normal(0, 0.01, X[idx].shape)
+                augmented_X.append(X[idx] + noise)
+                augmented_y.append(y[idx])
+
+        return np.concatenate((X, np.array(augmented_X))), np.concatenate((y, np.array(augmented_y)))
+
+    def wbfm_training(self):
+        # Apply augmentation for WBFM class before training
+        X_train, y_train, X_test, y_test = self.setup()
+        X_train, y_train = self.augment_wbfm_samples(X_train, y_train, target_class=self.label_encoder.transform(['WBFM'])[0])
+        self.train(
+                    X_train,
+                    y_train,
+                    X_test,
+                    y_test,
+                    epochs=20,
+                    batch_size=32,
+                    use_clr=True)
+        self.evaluate(X_test, y_test)
+                       

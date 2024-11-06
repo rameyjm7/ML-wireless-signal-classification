@@ -130,9 +130,10 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
         return history
 
 
+
 if __name__ == "__main__":
     # set the model name
-    model_name = "rnn_lstm_w_SNR_0.5_0.2_0.1"
+    model_name = "rnn_lstm_w_SNR"
     # Get the directory of the current script
     script_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -153,4 +154,5 @@ if __name__ == "__main__":
     # Initialize the classifier
     classifier = ModulationLSTMClassifier(data_path, model_path, stats_path)
     # classifier.change_dropout_test()
-    classifier.main()
+    # classifier.main()
+    classifier.wbfm_training()
