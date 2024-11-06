@@ -60,6 +60,7 @@ class BaseModulationClassifier(ABC):
         self.load_stats()
         self.log_dir = "logs/fit/" + datetime.now().strftime("%Y%m%d-%H%M%S")
         self.load_data()
+        self.run_tensorboard = True
 
     def load_stats(self):
         if os.path.exists(self.stats_path):
@@ -316,7 +317,8 @@ class BaseModulationClassifier(ABC):
             common_vars.models_dir, "plots", f"{self.get_model_name()}.png"
         )
 
-        self.setup_tensorboard()
+        if self.run_tensorboard:
+            self.setup_tensorboard()
         return X_train, y_train, X_test, y_test
 
 
@@ -414,13 +416,13 @@ class BaseModulationClassifier(ABC):
 
         for idx in wbfm_indices:
             for _ in range(augmentation_factor):
-                noise = np.random.normal(0, 0.01, X[idx].shape)
+                noise = np.random.normal(0, 0.005, X[idx].shape)
                 augmented_X.append(X[idx] + noise)
                 augmented_y.append(y[idx])
 
         return np.concatenate((X, np.array(augmented_X))), np.concatenate((y, np.array(augmented_y)))
 
-    def wbfm_fine_tuning(self):
+    def wbfm_fine_tuning(self, augment = True):
         # Set up the training and testing data
         X_train, y_train, X_test, y_test = self.setup()
 
@@ -430,9 +432,10 @@ class BaseModulationClassifier(ABC):
         X_train_filtered = X_train[filtered_indices]
         y_train_filtered = y_train[filtered_indices]
 
-        # # Apply augmentation for WBFM samples in the filtered dataset
-        # wbfm_class_label = self.label_encoder.transform(['WBFM'])[0]
-        # X_train_augmented, y_train_augmented = self.augment_wbfm_samples(X_train_filtered, y_train_filtered, target_class=wbfm_class_label)
+        if augment:
+            # Apply augmentation for WBFM samples in the filtered dataset
+            wbfm_class_label = self.label_encoder.transform(['WBFM'])[0]
+            X_train_filtered, y_train_filtered = self.augment_wbfm_samples(X_train_filtered, y_train_filtered, target_class=wbfm_class_label)
 
         # Fine-tune the model on the filtered and augmented dataset
         self.train_continuously(
@@ -440,7 +443,7 @@ class BaseModulationClassifier(ABC):
             y_train_filtered,
             X_test,
             y_test,
-            batch_size=32,
+            batch_size=64,
             use_clr=True       # Cyclical learning rate
         )
 
