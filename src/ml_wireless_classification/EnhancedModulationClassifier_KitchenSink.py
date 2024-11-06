@@ -1,5 +1,6 @@
 
 import os
+import gc
 import pickle
 import numpy as np
 from sklearn.model_selection import train_test_split
@@ -205,6 +206,9 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
                     
 
                 except Exception as e:
+                    # Run garbage collector
+                    gc.collect()
+                    tf.keras.backend.clear_session()
                     print(e)
                     pass
 

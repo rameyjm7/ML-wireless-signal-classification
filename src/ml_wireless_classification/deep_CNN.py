@@ -28,6 +28,19 @@ from tensorflow.keras.layers import Add, Conv2D, Activation
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Input
 
+def residual_block(x, filters, kernel_size=(3, 3), stride=(1, 1)):
+    shortcut = x
+    x = Conv2D(filters, kernel_size, padding='same', strides=stride, activation='relu')(x)
+    x = BatchNormalization()(x)
+    x = Conv2D(filters, kernel_size, padding='same', strides=stride)(x)
+    x = BatchNormalization()(x)
+    
+    # Add shortcut (identity connection)
+    x = Add()([x, shortcut])
+    x = Activation('relu')(x)
+    return x
+
+
 
 class ModulationLSTMClassifier(BaseModulationClassifier):
     def __init__(
@@ -44,9 +57,9 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
 
         for (mod_type, snr), signals in self.data.items():
             for signal in signals:
-                iq_signal = np.vstack([signal[0], signal[1]]).T
+                iq_signal = np.fft.fft(signal[0] + 1j * signal[1], n=128).real  # Use real part for Conv1D
                 snr_signal = np.full((128, 1), snr)
-                combined_signal = np.hstack([iq_signal, snr_signal])
+                combined_signal = np.hstack([iq_signal.reshape(-1, 1), snr_signal])
                 X.append(combined_signal)
                 y.append(mod_type)
 
@@ -63,7 +76,7 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
 
         return X_train, X_test, y_train, y_test
 
-    def build_model(self, input_shape, num_classes):
+    def build_model_original(self, input_shape, num_classes):
         if os.path.exists(self.model_path):
             print(f"Loading existing model from {self.model_path}")
             self.model = load_model(self.model_path)
@@ -87,6 +100,41 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
                 metrics=["accuracy"],
             )
             
+    def build_model(self, input_shape, num_classes):
+        return self.build_model_deep_cnn(input_shape, num_classes)
+        
+    def build_model_deep_cnn(self, input_shape, num_classes):
+        # Check if model already exists
+        if os.path.exists(self.model_path):
+            print(f"Loading existing model from {self.model_path}")
+            self.model = load_model(self.model_path)
+        else:
+            print("Building new deep CNN model")
+            self.model = Sequential([
+                Conv2D(64, (3, 3), activation='relu', input_shape=(input_shape[0], input_shape[1], 1)),
+                BatchNormalization(),
+                MaxPooling2D((2, 1)),  # Reduce pooling size to keep spatial dimensions
+                Dropout(0.3),
+
+                Conv2D(512, (3, 3), activation='relu', padding='same'),
+                BatchNormalization(),
+                MaxPooling2D((2, 1)),  # Ensure that spatial dimensions remain positive
+                Dropout(0.4),
+
+                Flatten(),
+                Dense(512, activation='relu'),
+                Dropout(0.5),
+                Dense(256, activation='relu'),
+                Dropout(0.5),
+                Dense(num_classes, activation='softmax')
+            ])
+
+        # Compile the model
+        self.model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+        # self.save_model()
+        return self.model
+
+
     def train(
         self,
         X_train,
@@ -111,11 +159,11 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
 
         if use_clr:
             clr_scheduler = LearningRateScheduler(
-                lambda epoch: cyclical_lr(epoch, step_size=clr_step_size)
+                lambda epoch: self.cyclical_lr(epoch, step_size=clr_step_size)
             )
             callbacks.append(clr_scheduler)
 
-        stats_interval = 5
+        stats_interval = 20
         for epoch in range(epochs // stats_interval):
             # X_train_augmented = augment_data_progressive(X_train.copy(), epoch, epochs)
             history = self.model.fit(
@@ -132,11 +180,37 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
             self.update_and_save_stats(current_accuracy)
 
         return history
+    
+    def setup(self):
+        # Load the dataset
+        self.load_data()
 
+        # Prepare the data
+        X_train, X_test, y_train, y_test = self.prepare_data()
+
+        # Reshape data to add channel dimension for CNN
+        # Assuming X_train and X_test are in shape (samples, height, width)
+        # we need to reshape them to (samples, height, width, 1)
+        X_train = X_train[..., np.newaxis]  # Adds a single channel dimension
+        X_test = X_test[..., np.newaxis]    # Adds a single channel dimension
+
+        # Build the model (load if it exists)
+        input_shape = X_train.shape[1:]  # Now includes the new channel dimension
+        num_classes = len(np.unique(y_train))  # Number of unique modulation types
+        self.build_model(input_shape, num_classes)
+
+        return X_train, y_train, X_test, y_test
+
+    def cyclical_lr(self, epoch, base_lr=1e-3, max_lr=1e-2, step_size=10):
+        cycle = np.floor(1 + epoch / (2 * step_size))
+        x = np.abs(epoch / step_size - 2 * cycle + 1)
+        lr = base_lr + (max_lr - base_lr) * max(0, (1 - x))
+        print(f"Learning rate for epoch {epoch+1}: {lr}")
+        return lr
 
 if __name__ == "__main__":
     # set the model name
-    model_name = "rnn_lstm_w_SNR"
+    model_name = "IQ_SNR_DeepCNN"
     # Get the directory of the current script
     script_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -156,4 +230,5 @@ if __name__ == "__main__":
 
     # Initialize the classifier
     classifier = ModulationLSTMClassifier(data_path, model_path, stats_path)
+    # classifier.change_dropout_test()
     classifier.main()
