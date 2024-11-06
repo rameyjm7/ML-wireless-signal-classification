@@ -15,7 +15,7 @@ from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.models import Sequential, load_model, clone_model
 from tensorflow.keras.layers import LSTM, Dense, Dropout
 from tensorflow.keras.utils import plot_model
-from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay, classification_report
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import train_test_split
@@ -212,16 +212,34 @@ class BaseModulationClassifier(ABC):
             self.evaluate(X_test, y_test)
             self.save_stats()
 
+
+
     def evaluate(self, X_test, y_test):
+        # Evaluate overall test accuracy
         test_loss, test_acc = self.model.evaluate(X_test, y_test)
         print(f"Test Accuracy: {test_acc * 100:.2f}%")
-
-        # Generate predictions and save confusion matrix
+        
+        # Generate predictions
         y_pred = self.model.predict(X_test)
         y_pred_classes = np.argmax(y_pred, axis=1)
+
+        # Save confusion matrix
         self.save_confusion_matrix(y_test, y_pred_classes)
+        
+        # Calculate and print accuracy per class
+        conf_matrix = confusion_matrix(y_test, y_pred_classes)
+        class_accuracies = conf_matrix.diagonal() / conf_matrix.sum(axis=1)
+        
+        print("\nPer-Class Accuracy:")
+        for idx, accuracy in enumerate(class_accuracies):
+            print(f"Class {self.label_encoder.inverse_transform([idx])[0]}: {accuracy * 100:.2f}%")
+        
+        # Optional: Print detailed classification report (includes precision, recall, f1-score)
+        print("\nClassification Report:")
+        print(classification_report(y_test, y_pred_classes, target_names=self.label_encoder.classes_))
 
         return test_acc
+
 
     def get_model_name(self):
         return os.path.basename(self.model_path).split(".")[0]
