@@ -107,7 +107,7 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
 
         if use_clr:
             clr_scheduler = LearningRateScheduler(
-                lambda epoch: cyclical_lr(epoch, step_size=clr_step_size)
+                lambda epoch: self.cyclical_lr(epoch, step_size=clr_step_size)
             )
             callbacks.append(clr_scheduler)
 
@@ -155,4 +155,4 @@ if __name__ == "__main__":
     classifier = ModulationLSTMClassifier(data_path, model_path, stats_path)
     # classifier.change_dropout_test()
     # classifier.main()
-    classifier.wbfm_training()
+    classifier.wbfm_fine_tuning()

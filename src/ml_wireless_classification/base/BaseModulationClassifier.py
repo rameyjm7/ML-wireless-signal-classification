@@ -165,7 +165,7 @@ class BaseModulationClassifier(ABC):
 
         return history
 
-    def cyclical_lr(self, epoch, base_lr=1e-6, max_lr=1e-2, step_size=10):
+    def cyclical_lr(self, epoch, base_lr=1e-6, max_lr=1e-4, step_size=10):
         cycle = np.floor(1 + epoch / (2 * step_size))
         x = np.abs(epoch / step_size - 2 * cycle + 1)
         lr = base_lr + (max_lr - base_lr) * max(0, (1 - x))
@@ -407,7 +407,7 @@ class BaseModulationClassifier(ABC):
         print("Predicted Labels: ", predictions[:5])
         print("True Labels: ", self.label_encoder.inverse_transform(y_test[:5]))
 
-    def augment_wbfm_samples(self, X, y, target_class, augmentation_factor=4):
+    def augment_wbfm_samples(self, X, y, target_class, augmentation_factor=2):
         # Duplicate WBFM samples and add minor variations
         wbfm_indices = np.where(y == target_class)[0]
         augmented_X, augmented_y = [], []
@@ -420,17 +420,29 @@ class BaseModulationClassifier(ABC):
 
         return np.concatenate((X, np.array(augmented_X))), np.concatenate((y, np.array(augmented_y)))
 
-    def wbfm_training(self):
-        # Apply augmentation for WBFM class before training
+    def wbfm_fine_tuning(self):
+        # Set up the training and testing data
         X_train, y_train, X_test, y_test = self.setup()
-        X_train, y_train = self.augment_wbfm_samples(X_train, y_train, target_class=self.label_encoder.transform(['WBFM'])[0])
-        self.train(
-                    X_train,
-                    y_train,
-                    X_test,
-                    y_test,
-                    epochs=20,
-                    batch_size=32,
-                    use_clr=True)
+
+        # Filter dataset for WBFM and a few similar classes
+        target_classes = ['WBFM', 'AM-DSB', 'QPSK']
+        filtered_indices = np.isin(y_train, self.label_encoder.transform(target_classes))
+        X_train_filtered = X_train[filtered_indices]
+        y_train_filtered = y_train[filtered_indices]
+
+        # # Apply augmentation for WBFM samples in the filtered dataset
+        # wbfm_class_label = self.label_encoder.transform(['WBFM'])[0]
+        # X_train_augmented, y_train_augmented = self.augment_wbfm_samples(X_train_filtered, y_train_filtered, target_class=wbfm_class_label)
+
+        # Fine-tune the model on the filtered and augmented dataset
+        self.train_continuously(
+            X_train_filtered,
+            y_train_filtered,
+            X_test,
+            y_test,
+            batch_size=32,
+            use_clr=True       # Cyclical learning rate
+        )
+
+        # Evaluate the model performance
         self.evaluate(X_test, y_test)
-                       
