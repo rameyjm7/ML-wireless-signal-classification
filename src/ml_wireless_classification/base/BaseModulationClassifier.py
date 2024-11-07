@@ -4,7 +4,6 @@ import json
 import os
 import ctypes
 import gc
-import json
 from datetime import datetime
 import numpy as np
 import subprocess
@@ -449,3 +448,32 @@ class BaseModulationClassifier(ABC):
 
         # Evaluate the model performance
         self.evaluate(X_test, y_test)
+
+    def save_model_to_json(self):
+        # Generate the filename using the model name
+        model_name = self.get_model_name()
+        filename = os.path.join(common_vars.models_dir,f"{model_name}_layers.json")
+        
+        # Prepare to store layers info
+        model_info = []
+
+        # Loop through each layer in the model
+        for layer in self.model.layers:
+            layer_info = {
+                "type": layer.__class__.__name__,  # Layer type (e.g., "Dense", "LSTM")
+                "config": layer.get_config(),      # Layer configuration (e.g., units, activation)
+            }
+            
+            # Get weights and biases, if available, and convert them to lists
+            weights = layer.get_weights()
+            if weights:
+                layer_info["weights"] = [w.tolist() for w in weights]
+            
+            # Append the layer information to the model info list
+            model_info.append(layer_info)
+
+        # Save to a JSON file
+        with open(filename, "w") as json_file:
+            json.dump(model_info, json_file, indent=4)
+        
+        print(f"Model layers and weights saved to {filename}")

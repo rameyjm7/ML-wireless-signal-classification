@@ -362,8 +362,8 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
             )
         return self.model
 
-    def build_model_alt(self, input_shape, num_classes):
-        if 0:  # os.path.exists(self.model_path):
+    def build_model_0(self, input_shape, num_classes):
+        if os.path.exists(self.model_path):
             print(f"Loading existing model from {self.model_path}")
             self.model = load_model(self.model_path)
         else:
@@ -383,11 +383,14 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
                 optimizer=optimizer,
                 metrics=["accuracy"],
             )
+            
+    def build_model(self, input_shape, num_classes):
+        return self.build_model_0(input_shape, num_classes)
 
 
 if __name__ == "__main__":
     # set the model name
-    model_name = "rnn_lstm_w_SNR_v3"
+    model_name = "rnn_lstm_w_SNR_5_2_1"
     # Get the directory of the current script
     script_dir = os.path.dirname(os.path.abspath(__file__))
 
