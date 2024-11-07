@@ -44,7 +44,17 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
 
         for (mod_type, snr), signals in self.data.items():
             for signal in signals:
-                iq_signal = np.vstack([signal[0], signal[1]]).T
+                # Separate real and imaginary parts for the IQ signal
+                real_signal = signal[0]
+                imag_signal = signal[1]
+                # Normalize each channel separately to the range [-1, 1]
+                max_real = np.max(np.abs(real_signal))
+                max_imag = np.max(np.abs(imag_signal))
+                real_signal = real_signal / max_real if max_real != 0 else real_signal
+                imag_signal = imag_signal / max_imag if max_imag != 0 else imag_signal
+                
+                # Stack the normalized real and imaginary parts to form a (128, 2) array
+                iq_signal = np.vstack([real_signal, imag_signal]).T  # Shape: (128, 2)
                 snr_signal = np.full((128, 1), snr)
                 combined_signal = np.hstack([iq_signal, snr_signal])
                 X.append(combined_signal)
@@ -62,82 +72,66 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
         X_test = X_test.reshape(-1, X_test.shape[1], X_test.shape[2])
 
         return X_train, X_test, y_train, y_test
-
+    
     def build_model(self, input_shape, num_classes):
-        if os.path.exists(self.model_path):
+        if 0:  # os.path.exists(self.model_path):
             print(f"Loading existing model from {self.model_path}")
             self.model = load_model(self.model_path)
         else:
-            print(f"Building new model")
-            self.model = Sequential(
-                [
-                    LSTM(128, input_shape=input_shape, return_sequences=True),
-                    Dropout(0.5),
-                    LSTM(128, return_sequences=False),
-                    Dropout(0.2),
-                    Dense(128, activation="relu"),
-                    Dropout(0.1),
-                    Dense(num_classes, activation="softmax"),
-                ]
-            )
+            print("Building new complex model")
+            self.model = Sequential()
+            
+            # Initial LSTM layers with increased units and Dropout
+            self.model.add(LSTM(256, input_shape=input_shape, return_sequences=True))
+            self.model.add(Dropout(0.5))
+            self.model.add(LSTM(256, return_sequences=False))
+            self.model.add(Dropout(0.4))
+            
+            # Fully connected layers for classification
+            self.model.add(Dense(256, activation="relu"))
+            self.model.add(Dropout(0.4))
+            self.model.add(Dense(128, activation="relu"))
+            self.model.add(Dropout(0.3))
+            self.model.add(Dense(64, activation="relu"))
+            self.model.add(Dropout(0.2))
+            
+            # Output layer
+            self.model.add(Dense(num_classes, activation="softmax"))
+            
             optimizer = Adam(learning_rate=self.learning_rate)
             self.model.compile(
                 loss="sparse_categorical_crossentropy",
                 optimizer=optimizer,
                 metrics=["accuracy"],
             )
-            
-    def train(
-        self,
-        X_train,
-        y_train,
-        X_test,
-        y_test,
-        epochs=20,
-        batch_size=64,
-        use_clr=False,
-        clr_step_size=10,
-    ):
-        # Define the custom early stopping callback
-        early_stopping_custom = CustomEarlyStopping(
-            monitor="val_accuracy",
-            min_delta=0.01,
-            patience=5,
-            restore_best_weights=True,
-        )
+        return self.model
 
-        # Add it to the list of callbacks
-        callbacks = [early_stopping_custom]
 
-        if use_clr:
-            clr_scheduler = LearningRateScheduler(
-                lambda epoch: self.cyclical_lr(epoch, step_size=clr_step_size)
+    def build_model_alt(self, input_shape, num_classes):
+        if 0:#os.path.exists(self.model_path):
+            print(f"Loading existing model from {self.model_path}")
+            self.model = load_model(self.model_path)
+        else:
+            print(f"Building new model")
+            self.model = Sequential()
+            self.model.add(LSTM(128, input_shape=input_shape, return_sequences=True))
+            self.model.add(Dropout(0.2))
+            self.model.add(LSTM(128, return_sequences=False))
+            self.model.add(Dropout(0.2))
+            self.model.add(Dense(128, activation="relu"))
+            self.model.add(Dropout(0.2))
+            self.model.add(Dense(num_classes, activation="softmax"))
+
+            optimizer = Adam(learning_rate=self.learning_rate)
+            self.model.compile(
+                loss="sparse_categorical_crossentropy",
+                optimizer=optimizer,
+                metrics=["accuracy"],
             )
-            callbacks.append(clr_scheduler)
-
-        stats_interval = 5
-        for epoch in range(epochs // stats_interval):
-            # X_train_augmented = augment_data_progressive(X_train.copy(), epoch, epochs)
-            history = self.model.fit(
-                X_train,
-                y_train,
-                epochs=stats_interval,
-                batch_size=batch_size,
-                validation_data=(X_test, y_test),
-                callbacks=callbacks,
-            )
-
-            self.update_epoch_stats(epochs)
-            current_accuracy = max(history.history["val_accuracy"])
-            self.update_and_save_stats(current_accuracy)
-
-        return history
-
-
 
 if __name__ == "__main__":
     # set the model name
-    model_name = "rnn_lstm_w_SNR"
+    model_name = "rnn_lstm_w_SNR2"
     # Get the directory of the current script
     script_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -157,6 +151,4 @@ if __name__ == "__main__":
 
     # Initialize the classifier
     classifier = ModulationLSTMClassifier(data_path, model_path, stats_path)
-    # classifier.change_dropout_test()
-    # classifier.main()
-    classifier.wbfm_fine_tuning()
+    classifier.main()

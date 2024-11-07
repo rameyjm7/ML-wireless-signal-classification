@@ -29,16 +29,25 @@ from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Input
 
 def residual_block(x, filters, kernel_size=(3, 3), stride=(1, 1)):
+    # Save the input tensor for the shortcut connection
     shortcut = x
+    
+    # Main path: Apply two Conv2D layers with batch normalization
     x = Conv2D(filters, kernel_size, padding='same', strides=stride, activation='relu')(x)
     x = BatchNormalization()(x)
-    x = Conv2D(filters, kernel_size, padding='same', strides=stride)(x)
+    x = Conv2D(filters, kernel_size, padding='same', strides=(1, 1))(x)
     x = BatchNormalization()(x)
+    
+    # Adjust the shortcut path if the dimensions do not match
+    if shortcut.shape[-1] != filters or stride != (1, 1):
+        shortcut = Conv2D(filters, (1, 1), strides=stride, padding='same')(shortcut)
+        shortcut = BatchNormalization()(shortcut)
     
     # Add shortcut (identity connection)
     x = Add()([x, shortcut])
     x = Activation('relu')(x)
     return x
+
 
 
 
@@ -96,39 +105,47 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
 
 
     def build_model(self, input_shape, num_classes):
-        return self.build_model_deep_cnn(input_shape, num_classes)
+        return self.build_model_resnet(input_shape, num_classes)
         
-    def build_model_deep_cnn(self, input_shape, num_classes):
+    def build_model_resnet(self, input_shape, num_classes):
         # Check if model already exists
         if os.path.exists(self.model_path):
             print(f"Loading existing model from {self.model_path}")
             self.model = load_model(self.model_path)
         else:
-            print("Building new deep CNN model")
-            self.model = Sequential([
-                Conv2D(64, (3, 3), activation='relu', input_shape=(input_shape[0], input_shape[1], 1)),
-                BatchNormalization(),
-                MaxPooling2D((2, 1)),  # Reduce pooling size to keep spatial dimensions
-                Dropout(0.3),
+            print("Building new simplified ResNet model")
 
-                Conv2D(512, (3, 3), activation='relu', padding='same'),
-                BatchNormalization(),
-                MaxPooling2D((2, 1)),  # Ensure that spatial dimensions remain positive
-                Dropout(0.4),
+            # Define the input layer
+            inputs = Input(shape=(input_shape[0], input_shape[1], 1))
 
-                Flatten(),
-                Dense(512, activation='relu'),
-                Dropout(0.5),
-                Dense(256, activation='relu'),
-                Dropout(0.5),
-                Dense(num_classes, activation='softmax')
-            ])
+            # Initial Convolutional layer
+            x = Conv2D(32, (3, 3), activation='relu', padding='same')(inputs)
+            x = BatchNormalization()(x)
+            
+            # Add simplified residual blocks
+            x = residual_block(x, filters=32)
+            x = residual_block(x, filters=32, stride=(2, 1))  # Downsampling once
 
-        # Compile the model
-        self.model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
-        # self.save_model()
+            x = residual_block(x, filters=64, stride=(2, 1))  # Further downsampling
+            x = residual_block(x, filters=64)
+
+            # Global average pooling and a single dense layer for classification
+            x = Flatten()(x)
+            x = Dense(128, activation='relu')(x)  # Reduced number of units
+            x = Dropout(0.5)(x)
+
+            # Output layer
+            outputs = Dense(num_classes, activation='softmax')(x)
+
+            # Define the model
+            self.model = Model(inputs, outputs)
+
+            # Compile the model
+            self.model.compile(optimizer=Adam(learning_rate=self.learning_rate), 
+                            loss='sparse_categorical_crossentropy', 
+                            metrics=['accuracy'])
+
         return self.model
-
 
     def train(
         self,
@@ -205,7 +222,7 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
 
 if __name__ == "__main__":
     # set the model name
-    model_name = "IQ_SNR_DeepCNN"
+    model_name = "ResNet"
     # Get the directory of the current script
     script_dir = os.path.dirname(os.path.abspath(__file__))
 
