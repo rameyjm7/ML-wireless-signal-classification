@@ -5,17 +5,11 @@ faulthandler.enable()
 import os
 import numpy as np
 from ml_wireless_classification.base.CommonVars import common_vars
-from ml_wireless_classification.GenericModulationClassifier import GenericModulationClassifier
+from ml_wireless_classification.rnn_lstm_w_SNR import ModulationLSTMClassifier
 
 if __name__ == "__main__":
     # set the model name
-    models = [
-        "rnn_lstm_w_SNR",
-        "rnn_lstm_multifeature_generic",   # this model needs to be regenerated
-        "ConvLSTM_FFT_Power_SNR",
-        "ConvLSTM_IQ_SNR",
-    ]
-    model_name = models[1]
+    model_name = "rnn_lstm_w_SNR2"
     # Get the directory of the current script
     script_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -34,5 +28,5 @@ if __name__ == "__main__":
     print("Stats path:", stats_path)
 
     # Initialize the classifier
-    classifier = GenericModulationClassifier(model_name, data_path, model_path, stats_path).classifier
+    classifier = ModulationLSTMClassifier(data_path, model_path, stats_path)
     classifier.main()
