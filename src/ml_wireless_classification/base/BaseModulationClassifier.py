@@ -291,6 +291,14 @@ class BaseModulationClassifier(ABC):
 
         self.save_stats()
 
+    def apply_class_weighting(self, y_train):
+        # Calculate class weights
+        class_weights = compute_class_weight(class_weight='balanced', classes=np.unique(y_train), y=y_train)
+        self.class_weights_dict = dict(enumerate(class_weights))
+        # Increase the weight for WBFM by a factor (e.g., 2)
+        focus_factor = 2  # Increase this to focus more on WBFM
+        self.class_weights_dict[10] *= focus_factor
+
     def setup(self):
         # Load the dataset
         self.load_data()
@@ -298,12 +306,7 @@ class BaseModulationClassifier(ABC):
         # Prepare the data
         X_train, X_test, y_train, y_test = self.prepare_data()
         
-        # Calculate class weights
-        class_weights = compute_class_weight(class_weight='balanced', classes=np.unique(y_train), y=y_train)
-        self.class_weights_dict = dict(enumerate(class_weights))
-        # Increase the weight for WBFM by a factor (e.g., 2)
-        focus_factor = 4  # Increase this to focus more on WBFM
-        self.class_weights_dict[10] *= focus_factor
+        self.apply_class_weighting(y_train)
 
         # Build the model (load if it exists)
         input_shape = (

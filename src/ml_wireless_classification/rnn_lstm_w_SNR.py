@@ -57,17 +57,18 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
 
         for (mod_type, snr), signals in self.data.items():
             for signal in signals:
-                # Separate real and imaginary parts for the IQ signal
-                real_signal = signal[0]
-                imag_signal = signal[1]
-                # Normalize each channel separately to the range [-1, 1]
-                max_real = np.max(np.abs(real_signal))
-                max_imag = np.max(np.abs(imag_signal))
-                real_signal = real_signal / max_real if max_real != 0 else real_signal
-                imag_signal = imag_signal / max_imag if max_imag != 0 else imag_signal
+                # # Separate real and imaginary parts for the IQ signal
+                # real_signal = signal[0]
+                # imag_signal = signal[1]
+                # # Normalize each channel separately to the range [-1, 1]
+                # max_real = np.max(np.abs(real_signal))
+                # max_imag = np.max(np.abs(imag_signal))
+                # real_signal = real_signal / max_real if max_real != 0 else real_signal
+                # imag_signal = imag_signal / max_imag if max_imag != 0 else imag_signal
 
-                # Stack the normalized real and imaginary parts to form a (128, 2) array
-                iq_signal = np.vstack([real_signal, imag_signal]).T  # Shape: (128, 2)
+                # # Stack the normalized real and imaginary parts to form a (128, 2) array
+                # iq_signal = np.vstack([real_signal, imag_signal]).T  # Shape: (128, 2)
+                iq_signal = np.vstack([signal[0], signal[1]]).T
                 snr_signal = np.full((128, 1), snr)
                 combined_signal = np.hstack([iq_signal, snr_signal])
                 X.append(combined_signal)
@@ -182,7 +183,7 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
             )
         return self.model
 
-    def build_model_v4(self, input_shape, num_classes):
+    def build_model_v5(self, input_shape, num_classes):
         if os.path.exists(self.model_path):
             print(f"Loading existing model from {self.model_path}")
             self.model = load_model(self.model_path)
@@ -231,7 +232,7 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
             )
         return self.model
 
-    def build_model_v5(self, input_shape, num_classes):
+    def build_model_v6(self, input_shape, num_classes):
         if os.path.exists(self.model_path):
             print(f"Loading existing model from {self.model_path}")
             self.model = load_model(self.model_path)
@@ -283,7 +284,7 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
         return self.model
 
     # add recurrent dropout to LSMT layers
-    def build_model_v6(self, input_shape, num_classes):
+    def build_model_v7(self, input_shape, num_classes):
         if os.path.exists(self.model_path):
             print(f"Loading existing model from {self.model_path}")
             self.model = load_model(self.model_path)
@@ -362,6 +363,53 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
             )
         return self.model
 
+    def build_model_v8(self, input_shape, num_classes):
+        if os.path.exists(self.model_path):
+            print(f"Loading existing model from {self.model_path}")
+            self.model = load_model(self.model_path)
+        else:
+            print("Building new complex model")
+            self.model = Sequential()
+
+            # Initial LSTM layers with increased units and Dropout
+            self.model.add(Bidirectional(LSTM(256, input_shape=input_shape, return_sequences=True)))
+            self.model.add(Dropout(0.5))
+            self.model.add(Bidirectional(LSTM(256, return_sequences=False)))
+            self.model.add(Dropout(0.4))
+
+            # Fully connected layers for classification
+            self.model.add(
+                Dense(512, activation="relu")
+            )  # New dense layer with 512 units
+            self.model.add(Dropout(0.5))  # Higher dropout for the added layer
+            self.model.add(Dense(256, activation="relu"))
+            self.model.add(Dropout(0.4))
+            self.model.add(Dense(128, activation="relu"))
+            self.model.add(Dropout(0.3))
+            self.model.add(
+                Dense(96, activation="relu")
+            )  # New dense layer with 96 units
+            self.model.add(Dropout(0.25))
+            self.model.add(Dense(64, activation="relu"))
+            self.model.add(Dropout(0.2))
+            self.model.add(
+                Dense(32, activation="relu")
+            )  # Final dense layer before output
+            self.model.add(
+                Dropout(0.1)
+            )  # Slight dropout for last fully connected layer
+
+            # Output layer
+            self.model.add(Dense(num_classes, activation="softmax"))
+
+            optimizer = Adam(learning_rate=self.learning_rate)
+            self.model.compile(
+                loss="sparse_categorical_crossentropy",
+                optimizer=optimizer,
+                metrics=["accuracy"],
+            )
+        return self.model
+
     def build_model_0(self, input_shape, num_classes):
         if os.path.exists(self.model_path):
             print(f"Loading existing model from {self.model_path}")
@@ -385,12 +433,12 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
             )
             
     def build_model(self, input_shape, num_classes):
-        return self.build_model_0(input_shape, num_classes)
+        return self.build_model_v3(input_shape, num_classes)
 
 
 if __name__ == "__main__":
     # set the model name
-    model_name = "rnn_lstm_w_SNR_5_2_1"
+    model_name = "rnn_lstm_w_SNR2"
     # Get the directory of the current script
     script_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -399,7 +447,7 @@ if __name__ == "__main__":
     )  # One level up from the script's directory
 
     common_vars.stats_dir = os.path.join(script_dir, "stats")
-    common_vars.models_dir = os.path.join(script_dir, "models")
+    common_vars.models_dir = os.path.join(script_dir, " models")
     model_path = os.path.join(script_dir, "models", f"{model_name}.keras")
     stats_path = os.path.join(script_dir, "stats", f"{model_name}_stats.json")
 
