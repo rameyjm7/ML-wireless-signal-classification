@@ -1,7 +1,8 @@
 import numpy as np
 from scipy.signal import hilbert, stft
-from scipy.stats import kurtosis, skew
-
+from scipy.stats import kurtosis, skew, entropy
+from scipy.signal import find_peaks, hilbert, welch
+from scipy.fft import fft, fftfreq
 
 def compute_fft_features(signal):
     fft_result = np.fft.fft(signal)
@@ -215,3 +216,122 @@ def compute_modulation_index(signal):
     peak_amplitude = np.max(envelope)
     average_amplitude = np.mean(envelope)
     return (peak_amplitude - average_amplitude) / average_amplitude if average_amplitude != 0 else 0
+
+from scipy.signal import hilbert
+import numpy as np
+
+# Instantaneous Amplitude, Phase, and Frequency
+def compute_instantaneous_features(signal):
+    analytic_signal = hilbert(signal)
+    amplitude = np.abs(analytic_signal)
+    phase = np.unwrap(np.angle(analytic_signal))
+    frequency = np.diff(phase) / (2.0 * np.pi)
+    frequency = np.pad(frequency, (0, 1), mode="edge")  # To match original signal length
+    return amplitude, phase, frequency
+
+# Modulation Index
+def compute_modulation_index(signal):
+    amplitude, _ = compute_instantaneous_features(signal)[:2]
+    peak_amplitude = np.max(amplitude)
+    average_amplitude = np.mean(amplitude)
+    return (peak_amplitude - average_amplitude) / (average_amplitude + 1e-10)
+
+# Spectral Asymmetry (for AM-SSB)
+def compute_spectral_asymmetry(signal):
+    magnitude_spectrum = np.abs(np.fft.fft(signal))
+    midpoint = len(magnitude_spectrum) // 2
+    lower_half_energy = np.sum(magnitude_spectrum[:midpoint] ** 2)
+    upper_half_energy = np.sum(magnitude_spectrum[midpoint:] ** 2)
+    return (upper_half_energy - lower_half_energy) / (upper_half_energy + lower_half_energy + 1e-10)
+
+# Instantaneous Frequency Deviation (already defined if using for WBFM)
+def instantaneous_frequency_deviation(signal):
+    analytic_signal = hilbert(signal)
+    inst_phase = np.unwrap(np.angle(analytic_signal))
+    inst_freq = np.diff(inst_phase) / (2.0 * np.pi)
+    return np.std(inst_freq)
+
+# Spectral Entropy (already defined)
+def spectral_entropy(signal, fs=1.0):
+    from scipy.signal import welch
+    from scipy.stats import entropy
+    freqs, power_spectrum = welch(signal, fs=fs)
+    power_spectrum /= np.sum(power_spectrum)
+    return entropy(power_spectrum)
+
+# Envelope Mean and Variance (already defined)
+def envelope_mean_variance(signal):
+    amplitude = np.abs(hilbert(signal))
+    return np.mean(amplitude), np.var(amplitude)
+
+# Spectral Flatness (already defined)
+def spectral_flatness(signal):
+    magnitude = np.abs(np.fft.fft(signal))
+    geometric_mean = np.exp(np.mean(np.log(magnitude + 1e-10)))
+    arithmetic_mean = np.mean(magnitude)
+    return geometric_mean / (arithmetic_mean + 1e-10)
+
+# Spectral Peaks and Bandwidth (already defined)
+def spectral_peaks_bandwidth(signal, threshold_ratio=0.5):
+    magnitude_spectrum = np.abs(np.fft.fft(signal))
+    max_magnitude = np.max(magnitude_spectrum)
+    threshold = threshold_ratio * max_magnitude
+    peaks, _ = find_peaks(magnitude_spectrum)
+    peak_count = len(peaks)
+    bandwidth_indices = np.where(magnitude_spectrum >= threshold)[0]
+    if len(bandwidth_indices) == 0:
+        return peak_count, 0.0  # No bandwidth if no peaks above threshold
+    lower_freq, upper_freq = min(bandwidth_indices), max(bandwidth_indices)
+    bandwidth = upper_freq - lower_freq
+    return peak_count, bandwidth
+
+# Zero Crossing Rate (already defined)
+def zero_crossing_rate(signal):
+    return ((signal[:-1] * signal[1:]) < 0).sum() / len(signal)
+
+def instantaneous_frequency_deviation(signal):
+    """
+    Calculates the standard deviation of instantaneous frequency
+    derived from the phase of the analytic signal.
+    """
+    # Unwrap the phase to obtain the instantaneous phase
+    inst_phase = np.unwrap(np.angle(signal))
+    # Calculate the instantaneous frequency as the derivative of phase
+    inst_freq = np.diff(inst_phase) / (2.0 * np.pi)
+    return np.std(inst_freq)
+
+
+
+def spectral_entropy(signal, fs=1.0):
+    freqs, power_spectrum = welch(signal, fs=fs)
+    power_spectrum /= np.sum(power_spectrum)
+    return entropy(power_spectrum)
+
+def envelope_mean_variance(signal):
+    envelope = np.abs(hilbert(signal))
+    return np.mean(envelope), np.var(envelope)
+
+def spectral_flatness(signal):
+    magnitude_spectrum = np.abs(fft(signal))
+    geometric_mean = np.exp(np.mean(np.log(magnitude_spectrum + 1e-10)))
+    arithmetic_mean = np.mean(magnitude_spectrum)
+    return geometric_mean / arithmetic_mean
+
+def spectral_peaks_bandwidth(signal, threshold_ratio=0.5):
+    magnitude_spectrum = np.abs(fft(signal))
+    freqs = fftfreq(len(magnitude_spectrum))
+    
+    # Bandwidth calculation
+    max_magnitude = np.max(magnitude_spectrum)
+    threshold = threshold_ratio * max_magnitude
+    bandwidth_indices = np.where(magnitude_spectrum >= threshold)[0]
+    low_freq, high_freq = freqs[bandwidth_indices[0]], freqs[bandwidth_indices[-1]]
+    bandwidth = high_freq - low_freq
+    
+    # Peaks calculation
+    peaks, _ = find_peaks(magnitude_spectrum)
+    peak_freqs = freqs[peaks]
+    return len(peak_freqs), bandwidth
+
+def zero_crossing_rate(signal):
+    return ((signal[:-1] * signal[1:]) < 0).sum() / len(signal)
