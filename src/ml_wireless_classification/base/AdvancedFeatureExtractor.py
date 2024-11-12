@@ -15,29 +15,63 @@ class AdvancedFeatureExtractor:
         self.real_signal = np.real(signal)
         self.spectrum = np.abs(fft(signal))
         self.freqs = fftfreq(len(signal), 1 / self.fs)
-        (
-            self.instantaneous_amplitude,
-            self.instantaneous_phase,
-            self.instantaneous_frequency,
-        ) = self.compute_instantaneous_features()
+        self.fft_result = np.fft.fft(signal)
+        self.magnitude = np.abs(self.fft_result)
+        
+    def fft_center_frequency(self):
+        """Compute the center frequency based on the peak index of the FFT magnitude."""
+        peak_idx = np.argmax(self.magnitude)
+        return peak_idx
+    
+    def fft_peak_power(self):
+        """Compute the peak power of the FFT in dB."""
+        peak_idx = np.argmax(self.magnitude)
+        peak_power = 20 * np.log10(self.magnitude[peak_idx])
+        return peak_power
 
-    def compute_fft_features(self):
-        fft_result = np.fft.fft(self.signal)
-        magnitude = np.abs(fft_result)
-        peak_idx = np.argmax(magnitude)
-        center_frequency = peak_idx
-        peak_power = 20 * np.log10(magnitude[peak_idx])
-        avg_power = 20 * np.log10(np.mean(magnitude))
-        std_dev_power = 20 * np.log10(np.std(magnitude))
-        return center_frequency, peak_power, avg_power, std_dev_power
+    def fft_avg_power(self):
+        """Compute the average power of the FFT in dB."""
+        avg_power = 20 * np.log10(np.mean(self.magnitude))
+        return avg_power
+    
+    def fft_std_dev_power(self):
+        """Compute the standard deviation of the power of the FFT in dB."""
+        std_dev_power = 20 * np.log10(np.std(self.magnitude))
+        return std_dev_power
 
-    def compute_instantaneous_features(self):
-        analytic_signal = hilbert(np.real(self.signal))
-        instantaneous_amplitude = np.abs(analytic_signal)
-        instantaneous_phase = np.unwrap(np.angle(analytic_signal))
-        instantaneous_frequency = np.diff(instantaneous_phase)
-        instantaneous_frequency = np.pad(instantaneous_frequency, (0, 1), mode="edge")
-        return instantaneous_amplitude, instantaneous_phase, instantaneous_frequency
+    def instantaneous_amplitude_mean(self):
+        analytic_signal = hilbert(self.real_signal)
+        amplitude = np.abs(analytic_signal)
+        return np.mean(amplitude)
+
+    def instantaneous_amplitude_std(self):
+        analytic_signal = hilbert(self.real_signal)
+        amplitude = np.abs(analytic_signal)
+        return np.std(amplitude)
+
+    def instantaneous_phase_mean(self):
+        analytic_signal = hilbert(self.real_signal)
+        phase = np.unwrap(np.angle(analytic_signal))
+        return np.mean(phase)
+
+    def instantaneous_phase_std(self):
+        analytic_signal = hilbert(self.real_signal)
+        phase = np.unwrap(np.angle(analytic_signal))
+        return np.std(phase)
+
+    def instantaneous_frequency_mean(self):
+        analytic_signal = hilbert(self.real_signal)
+        phase = np.unwrap(np.angle(analytic_signal))
+        frequency = np.diff(phase) / (2.0 * np.pi)
+        frequency = np.pad(frequency, (0, 1), mode="edge")
+        return np.mean(frequency)
+
+    def instantaneous_frequency_std(self):
+        analytic_signal = hilbert(self.real_signal)
+        phase = np.unwrap(np.angle(analytic_signal))
+        frequency = np.diff(phase) / (2.0 * np.pi)
+        frequency = np.pad(frequency, (0, 1), mode="edge")
+        return np.std(frequency)
 
     # Time Domain Features
     def snr(self):
@@ -188,38 +222,6 @@ class AdvancedFeatureExtractor:
         )
         return spread
 
-    # Derivatives of Key Features
-    # def derivative_of_snr(self):
-    #     return np.gradient(self.snr())
-
-    # def derivative_of_papr(self):
-    #     return np.gradient(self.papr())
-
-    # def derivative_of_rms_instant_freq(self):
-    #     return np.gradient(self.rms_instant_freq())
-
-    # def derivative_of_fft_peak_power(self):
-    #     return np.gradient(self.fft_peak_power())
-
-    # def derivative_of_bandwidth(self):
-    #     bw = self.bandwidth()
-    #     grad = np.gradient(bw)
-    #     return grad
-
-    # def derivative_of_spectral_entropy(self):
-    #     val = np.gradient(self.spectral_entropy())
-    #     return val
-
-    # def derivative_of_spectral_flatness(self):
-    #     val =  np.gradient(self.spectral_flatness())
-    #     return val
-
-    # def derivative_of_envelope_variance(self):
-    #     val =  np.gradient(self.envelope_variance())
-    #     return val
-
-    # def derivative_of_phase_variance(self):
-    #     return np.gradient(self.phase_variance())
 
     # Method to get all features
     def get_features(self):
