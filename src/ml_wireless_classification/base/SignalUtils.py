@@ -335,3 +335,61 @@ def spectral_peaks_bandwidth(signal, threshold_ratio=0.5):
 
 def zero_crossing_rate(signal):
     return ((signal[:-1] * signal[1:]) < 0).sum() / len(signal)
+
+def clean_training_data(X, y):
+    """
+    Cleans X and y by ensuring that all elements are scalars and removing infinities.
+    Prints a message if a sequence (list, tuple, array) or non-numeric value is found.
+    """
+    def check_and_clean_array(arr, array_name):
+        cleaned_arr = []
+        for i, row in enumerate(arr):
+            cleaned_row = []
+            for j, value in enumerate(row):
+                # Check if value is scalar
+                if np.isscalar(value):
+                    # Check for infinities or non-finite values
+                    if np.isinf(value) or np.isnan(value) or value > np.finfo(np.float32).max:
+                        # print(f"Warning: {array_name}[{i}][{j}] has an infinity or too large value. Setting to 0.")
+                        cleaned_row.append(0)  # Replace infinities or overly large values with 0
+                    else:
+                        cleaned_row.append(value)
+                elif isinstance(value, (list, tuple, np.ndarray)):
+                    # If it's a sequence, take the first element as a workaround (optional)
+                    sub_value = value[0] if len(value) > 0 else 0
+                    if np.isinf(sub_value) or np.isnan(sub_value) or sub_value > np.finfo(np.float32).max:
+                        # print(f"Warning: {array_name}[{i}][{j}] contains infinity or too large in sequence. Setting to 0.")
+                        sub_value = 0
+                    cleaned_row.append(sub_value)
+                    # print(f"Warning: {array_name}[{i}][{j}] is a sequence. Taking the first element.")
+                elif isinstance(value, str):
+                    # Handle string values with a warning
+                    # print(f"Warning: {array_name}[{i}][{j}] is a string. Removing and setting to 0.")
+                    cleaned_row.append(0)
+                else:
+                    # print(f"Warning: Unexpected data type at {array_name}[{i}][{j}]: {type(value)}")
+                    cleaned_row.append(0)  # Default to 0 if type is unexpected
+            cleaned_arr.append(cleaned_row)
+        
+        # Ensure cleaned_arr is a 2D array of fixed-length rows
+        max_length = max(len(row) for row in cleaned_arr)
+        # Pad rows with zeros if they are shorter than max_length
+        cleaned_arr = [row + [0] * (max_length - len(row)) for row in cleaned_arr]
+        
+        return np.array(cleaned_arr, dtype=float)
+    
+    # Clean X and y
+    X_cleaned = check_and_clean_array(X, "X_train")
+    y_cleaned = np.array([elem if np.isscalar(elem) else elem[0] for elem in y], dtype=float)
+
+    return X_cleaned, y_cleaned
+
+def ensure_2d(arr, name):
+    """
+    Ensures the array is 2D by reshaping if necessary.
+    """
+    if arr.ndim == 1:
+        print(f"Warning: {name} is 1-dimensional. Reshaping to 2D.")
+        arr = arr.reshape(-1, 1)
+    return arr
+
