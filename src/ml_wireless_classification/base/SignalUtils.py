@@ -10,6 +10,135 @@ from scipy.signal import hilbert, welch
 from scipy.ndimage import gaussian_filter1d
 import pywt
 
+ALL_FEATURES = [
+    # Instantaneous Frequency Features
+    "Inst. Freq. Dev (Magnitude)", "Inst. Freq. Dev (Phase)",
+    "Inst. Freq. Dev Std (Magnitude)", "Inst. Freq. Dev Std (Phase)",
+    "Inst. Freq. Rate of Change",
+    "Inst. Freq. Asymmetry (Cubic)",
+
+    # Phase Features
+    "Inst. Phase Deviation Rate (Magnitude)", "Inst. Phase Deviation Rate (Phase)",
+    "Phase Variance",
+    "Phase Change Rate (Quartic) (Magnitude)", "Phase Change Rate (Quartic) (Phase)",
+    "Skewness of Phase Changes (Cubic) (Magnitude)", "Skewness of Phase Changes (Cubic) (Phase)",
+    "Phase Modulation Skewness (Quartic) (Magnitude)", "Phase Modulation Skewness (Quartic) (Phase)",
+    "Phase-Envelope Correlation (Polynomial)",
+
+    # Amplitude Features
+    "Avg Symbol Power",
+    "PAPR",
+    "RMS of Signal Envelope",
+    "Instantaneous Amplitude Asymmetry",
+    "RMS of Signal Envelope (Polynomial)",
+    "Inst. Amplitude Asymmetry (Cubic)",
+    "Band-Pass Filtered RMS of Signal Envelope",
+
+    # Statistical Features
+    "Kurtosis Magnitude",
+    "Skewness Magnitude",
+    "PSD Kurtosis (Magnitude)", "PSD Kurtosis (Phase)",
+    "Autocorrelation Skewness (Quartic) (Magnitude)", "Autocorrelation Skewness (Quartic) (Phase)",
+    "Autocorrelation Energy Spread (Magnitude)", "Autocorrelation Energy Spread (Phase)",
+    "Fifth Order Cumulant (Magnitude)", "Fifth Order Cumulant (Phase)",
+
+    # Spectral Features
+    "Spectral Energy Density (Magnitude)", "Spectral Energy Density (Phase)",
+    "Spectral Peak Ratio (Magnitude)", "Spectral Peak Ratio (Phase)",
+    "Amplitude Spectral Flatness (Magnitude)", "Amplitude Spectral Flatness (Phase)",
+    "High-Frequency Spectral Entropy (Cubic)",
+    "Low-Frequency Spectral Flatness (Quartic)",
+    "Spectral Concentration Around Center (Magnitude)", "Spectral Concentration Around Center (Phase)",
+    "Frequency Spread Log (Cubic) (Magnitude)", "Frequency Spread Log (Cubic) (Phase)",
+    "Spectral Modulation Bandwidth (Quadratic)",
+
+    # Entropy Features
+    "Frequency Domain Entropy with High-Frequency Emphasis",
+    "Wavelet Entropy Multiple Scales (Quadratic)",
+
+    # Temporal Features
+    "Temporal Peak Density (Quadratic)",
+    "Interquartile Range of Envelope Peaks (Cubic)",
+    "Time-Frequency Energy Concentration (Magnitude)", "Time-Frequency Energy Concentration (Phase)",
+    "Energy Spread Time-Frequency (Gaussian) (Magnitude)", "Energy Spread Time-Frequency (Gaussian) (Phase)",
+    "Energy Spread Time-Frequency",
+    "Temporal Energy Variance (Gaussian)",
+
+    # Frequency Features
+    "Frequency Modulation Rate",
+    "Frequency Spread Variability (Magnitude)", "Frequency Spread Variability (Phase)",
+
+    # Wavelet Features
+    "Wavelet Transform (Cubic Kernel) (Magnitude)", "Wavelet Transform (Cubic Kernel) (Phase)",
+    "High-Frequency Wavelet Coefficient Mean (Quartic)",
+    "Wavelet Energy Concentration (High Frequency)",
+
+    # Spread Features
+    "Frequency Spread Log (Cubic) (Magnitude)", "Frequency Spread Log (Cubic) (Phase)",
+    "Normalized High-Frequency Power Ratio",
+
+    # Envelope Features
+    "Envelope Power Variability in Frequency Bands",
+
+    # Adaptive Features
+    "Adaptive Bandwidth Concentration (Gaussian) (Magnitude)", "Adaptive Bandwidth Concentration (Gaussian) (Phase)",
+    "Adaptive Gaussian Filtering (Frequency Domain)",
+
+    # Energy Concentration Features
+    "Mid-Band Energy Concentration (Polynomial) (Magnitude)", "Mid-Band Energy Concentration (Polynomial) (Phase)",
+    
+     # Spectral Flatness
+    "Spectral Flatness (Magnitude)",
+    "Spectral Flatness (Phase)",
+    
+    # Spectral Asymmetry
+    "Spectral Asymmetry (Magnitude)",
+    "Spectral Asymmetry (Phase)",
+    
+    # Frequency Spread Log (Cubic)
+    "Frequency Spread Log Cubic (Magnitude)",
+    "Frequency Spread Log Cubic (Phase)",
+    
+    # Envelope Power Variability
+    "Envelope Power Variability (Magnitude)",
+    "Envelope Power Variability (Phase)",
+    
+    # Temporal Energy Variance (Gaussian)
+    "Temporal Energy Variance Gaussian (Magnitude)",
+    "Temporal Energy Variance Gaussian (Phase)",
+    
+    # Band-Pass Filtered RMS of Signal Envelope
+    "Band-Pass Filtered RMS Envelope (Magnitude)",
+    "Band-Pass Filtered RMS Envelope (Phase)",
+    
+    # Adaptive Gaussian Filtering (Frequency Domain)
+    "Adaptive Gaussian Filtering (Magnitude)",
+    "Adaptive Gaussian Filtering (Phase)",
+    
+    # Mid-Band Energy Concentration (Polynomial)
+    "Mid-Band Energy Concentration (Magnitude)",
+    "Mid-Band Energy Concentration (Phase)"
+]
+EXPERIMENTAL_FEATURES = [
+    "Frequency Domain Entropy with High-Frequency Emphasis",
+    "Frequency Domain Entropy with Mid-Frequency Emphasis",
+    "Frequency Domain Entropy with Low-Frequency Emphasis",
+    "Spectral Peak Count (Magnitude)",
+    "Spectral Peak Average Amplitude (Magnitude)",
+    "Spectral Peak Energy Ratio (Magnitude)",
+    "Spectral Peak Width (Magnitude)",
+    "Peak-to-Average Ratio (Spectral Peaks)",
+    "Spectral Kurtosis (Peaks Only)",
+    "Peak Frequency Variation (Magnitude)",
+    "Total Spectral Energy in Peaks (Magnitude)",
+    "Spectral Flatness in Peak Band (Magnitude)",
+    "Spectral Energy Spread in Peaks (Magnitude)",
+    "Maximum Peak Amplitude (Magnitude)",
+    "Minimum Peak Amplitude (Magnitude)",
+    "Spectral Peak Density (Peaks per Hz)",
+    "Frequency Range of Spectral Peaks"
+]
+
 
 feature_dict = {}
 
@@ -27,76 +156,292 @@ def add_feature(name, func, *args):
         print(f"Error computing feature '{name}': {e}")
         
 
-def extract_comprehensive_features(complex_signal, real_signal, selected_features=None):
+def extract_comprehensive_features(complex_signal, selected_features=None):
     # If no specific features are provided, compute all by default
     compute_all_features = selected_features is None
-
+    real_signal = np.real(complex_signal)
+    
     def add_feature_if_selected(name, func, *args):
         """Compute and add the feature if either all features are being computed or it's in the selected_features list."""
         if compute_all_features or name in selected_features:
             add_feature(name, func, *args)
 
-    # Compute features conditionally based on selected_features or compute all if selected_features is None
-    add_feature_if_selected("Inst. Freq. Dev", instantaneous_frequency_deviation, complex_signal)
+    # Instantaneous Frequency Features
+    add_feature_if_selected("Inst. Freq. Dev (Magnitude)", lambda x: np.abs(instantaneous_frequency_deviation(x)), complex_signal)
+    add_feature_if_selected("Inst. Freq. Dev (Phase)", lambda x: np.angle(instantaneous_frequency_deviation(x)), complex_signal)
+    add_feature_if_selected("Inst. Freq. Dev Std (Magnitude)", lambda x: np.abs(instantaneous_frequency_deviation_std(x)), complex_signal)
+    add_feature_if_selected("Inst. Freq. Dev Std (Phase)", lambda x: np.angle(instantaneous_frequency_deviation_std(x)), complex_signal)
+    add_feature_if_selected("Inst. Freq. Rate of Change", instantaneous_frequency_rate_of_change, real_signal)
+    add_feature_if_selected("Inst. Freq. Asymmetry (Cubic)", lambda x: frequency_asymmetry(apply_kernel(x, kernel="cubic")), real_signal)
+
+    # Phase Features
+    add_feature_if_selected("Inst. Phase Deviation Rate (Magnitude)", lambda x: np.abs(instantaneous_phase_deviation_rate(x)), complex_signal)
+    add_feature_if_selected("Inst. Phase Deviation Rate (Phase)", lambda x: np.angle(instantaneous_phase_deviation_rate(x)), complex_signal)
     add_feature_if_selected("Phase Variance", lambda x: np.var(compute_instantaneous_features(x)[1]), real_signal)
+    add_feature_if_selected("Phase Change Rate (Quartic) (Magnitude)", lambda x: np.abs(phase_change_rate(apply_kernel(x, kernel="quartic"))), complex_signal)
+    add_feature_if_selected("Phase Change Rate (Quartic) (Phase)", lambda x: np.angle(phase_change_rate(apply_kernel(x, kernel="quartic"))), complex_signal)
+    add_feature_if_selected("Skewness of Phase Changes (Cubic) (Magnitude)", lambda x: np.abs(skewness_of_phase_changes(apply_kernel(x, kernel="cubic"))), complex_signal)
+    add_feature_if_selected("Skewness of Phase Changes (Cubic) (Phase)", lambda x: np.angle(skewness_of_phase_changes(apply_kernel(x, kernel="cubic"))), complex_signal)
+    add_feature_if_selected("Phase Modulation Skewness (Quartic) (Magnitude)", lambda x: np.abs(phase_modulation_skewness(apply_kernel(x, kernel="quartic"))), complex_signal)
+    add_feature_if_selected("Phase Modulation Skewness (Quartic) (Phase)", lambda x: np.angle(phase_modulation_skewness(apply_kernel(x, kernel="quartic"))), complex_signal)
+    add_feature_if_selected("Phase-Envelope Correlation (Polynomial)", lambda x: correlation(phase_envelope(x), apply_kernel(x, kernel="polynomial")), real_signal)
+
+    # Amplitude Features
     add_feature_if_selected("Avg Symbol Power", lambda x: np.mean(np.abs(x)**2), complex_signal)
     add_feature_if_selected("PAPR", lambda x: np.max(np.abs(x)**2) / np.mean(np.abs(x)**2), complex_signal)
-    add_feature_if_selected("Kurtosis Magnitude", lambda x: compute_kurtosis(np.abs(x)), complex_signal)
-    add_feature_if_selected("Skewness Magnitude", lambda x: compute_skewness(np.abs(x)), complex_signal)
-    add_feature_if_selected("High-Frequency Spectral Entropy (Cubic)", lambda x: spectral_entropy(apply_kernel(x, kernel="cubic", band="high")), complex_signal)
-    add_feature_if_selected("Low-Frequency Spectral Flatness (Quartic)", lambda x: spectral_flatness(apply_kernel(x, kernel="quartic", band="low")), complex_signal)
-    add_feature_if_selected("Mid-Band Energy Concentration (Polynomial)", lambda x: energy_concentration(apply_kernel(x, kernel="polynomial", band="mid")), complex_signal)
-    add_feature_if_selected("Adaptive Bandwidth Concentration (Gaussian)", lambda x: bandwidth_concentration(apply_kernel(x, kernel="gaussian", adaptive=True)), complex_signal)
-    add_feature_if_selected("Frequency Spread Log (Cubic)", lambda x: np.log(frequency_spread(apply_kernel(x, kernel="cubic"))), complex_signal)
-    add_feature_if_selected("Wavelet Entropy Multiple Scales (Quadratic)", lambda x: wavelet_entropy(x, kernel="quadratic"), complex_signal)
-    add_feature_if_selected("High-Frequency Wavelet Coefficient Mean (Quartic)", lambda x: wavelet_coefficient_mean(x, freq_band="high", kernel="quartic"), complex_signal)
-    add_feature_if_selected("Cubic Zero Crossing Rate", lambda x: zero_crossing_rate(apply_kernel(x, kernel="cubic")), complex_signal)
-    add_feature_if_selected("Phase Change Rate (Quartic)", lambda x: phase_change_rate(apply_kernel(x, kernel="quartic")), complex_signal)
-    add_feature_if_selected("Instantaneous Frequency Asymmetry (Cubic)", lambda x: frequency_asymmetry(apply_kernel(x, kernel="cubic")), real_signal)
-    add_feature_if_selected("RMS of Signal Envelope (Polynomial)", lambda x: rms_signal_envelope(apply_kernel(x, kernel="polynomial")), real_signal)
-    add_feature_if_selected("Skewness of Phase Changes (Cubic)", lambda x: skewness_of_phase_changes(apply_kernel(x, kernel="cubic")), complex_signal)
-    add_feature_if_selected("PSD Kurtosis", lambda x: kurtosis(np.abs(fft(x))**2), complex_signal)
-    add_feature_if_selected("Autocorrelation Skewness (Quartic)", lambda x: autocorrelation_skewness(apply_kernel(x, kernel="quartic")), complex_signal)
-    add_feature_if_selected("Spectral Modulation Bandwidth (Quadratic)", lambda x: spectral_modulation_bandwidth(apply_kernel(x, kernel="quadratic")), complex_signal)
-    add_feature_if_selected("Energy Spread Time-Frequency (Gaussian)", lambda x: energy_spread_time_frequency(apply_kernel(x, kernel="gaussian")), complex_signal)
-    add_feature_if_selected("IQR of Envelope Peaks (Cubic)", lambda x: interquartile_range(envelope_peaks(apply_kernel(x, kernel="cubic"))), real_signal)
-    add_feature_if_selected("Temporal Peak Density (Quadratic)", lambda x: peak_density(apply_kernel(x, kernel="quadratic")), complex_signal)
-    add_feature_if_selected("Phase Modulation Skewness (Quartic)", lambda x: phase_modulation_skewness(apply_kernel(x, kernel="quartic")), complex_signal)
-    add_feature_if_selected("Instantaneous Amplitude Asymmetry (Cubic)", lambda x: amplitude_asymmetry(apply_kernel(x, kernel="cubic")), real_signal)
-    add_feature_if_selected("Phase-Envelope Correlation (Polynomial)", lambda x: correlation(phase_envelope(x), apply_kernel(x, kernel="polynomial")), real_signal)
-    add_feature_if_selected("Instantaneous Frequency Deviation Std", instantaneous_frequency_deviation_std, complex_signal)
-    add_feature_if_selected("Spectral Concentration Around Center", spectral_concentration_center, complex_signal)
-    add_feature_if_selected("Energy Spread Time-Frequency", energy_spread_time_frequency, complex_signal)
-    add_feature_if_selected("Zero-Crossing Density (Frequency Domain)", zero_crossing_density_frequency, complex_signal)
-    add_feature_if_selected("Frequency Spread Log (Cubic)", frequency_spread_log_cubic, complex_signal)
-    add_feature_if_selected("Adaptive Gaussian Filtering (Frequency Domain)", adaptive_gaussian_filtering, complex_signal)
-    add_feature_if_selected("Wavelet Transform (Cubic Kernel)", lambda x: wavelet_high_order_kernel(x, kernel="cubic"), real_signal)
-    add_feature_if_selected("Frequency Modulation Rate", frequency_modulation_rate, real_signal)
     add_feature_if_selected("RMS of Signal Envelope", rms_signal_envelope, real_signal)
     add_feature_if_selected("Instantaneous Amplitude Asymmetry", amplitude_asymmetry, real_signal)
+    add_feature_if_selected("RMS of Signal Envelope (Polynomial)", lambda x: rms_signal_envelope(apply_kernel(x, kernel="polynomial")), real_signal)
+    add_feature_if_selected("Inst. Amplitude Asymmetry (Cubic)", lambda x: amplitude_asymmetry(apply_kernel(x, kernel="cubic")), real_signal)
     add_feature_if_selected("Band-Pass Filtered RMS of Signal Envelope", band_pass_filtered_rms, real_signal)
-    add_feature_if_selected("Time-Frequency Energy Concentration", time_frequency_energy_concentration, complex_signal)
-    add_feature_if_selected("Peak Density in Filtered Frequency Domain", peak_density_frequency_domain, complex_signal)
-    add_feature_if_selected("Normalized High-Frequency Power Ratio", normalized_high_freq_power_ratio, complex_signal)
+
+    # Statistical Features
+    add_feature_if_selected("Kurtosis Magnitude", lambda x: compute_kurtosis(np.abs(x)), complex_signal)
+    add_feature_if_selected("Skewness Magnitude", lambda x: compute_skewness(np.abs(x)), complex_signal)
+    add_feature_if_selected("PSD Kurtosis (Magnitude)", lambda x: np.abs(kurtosis(np.abs(np.fft.fft(x))**2)), complex_signal)
+    add_feature_if_selected("PSD Kurtosis (Phase)", lambda x: np.angle(kurtosis(np.abs(np.fft.fft(x))**2)), complex_signal)
+    add_feature_if_selected("Autocorrelation Skewness (Quartic) (Magnitude)", lambda x: np.abs(autocorrelation_skewness(apply_kernel(x, kernel="quartic"))), complex_signal)
+    add_feature_if_selected("Autocorrelation Skewness (Quartic) (Phase)", lambda x: np.angle(autocorrelation_skewness(apply_kernel(x, kernel="quartic"))), complex_signal)
+    add_feature_if_selected("Autocorrelation Energy Spread (Magnitude)", lambda x: np.abs(autocorrelation_energy_spread(x)), complex_signal)
+    add_feature_if_selected("Autocorrelation Energy Spread (Phase)", lambda x: np.angle(autocorrelation_energy_spread(x)), complex_signal)
+    add_feature_if_selected("Fifth Order Cumulant (Magnitude)", lambda x: np.abs(fifth_order_cumulant(x)), complex_signal)
+    add_feature_if_selected("Fifth Order Cumulant (Phase)", lambda x: np.angle(fifth_order_cumulant(x)), complex_signal)
+
+    # Spectral Features
+    add_feature_if_selected("Spectral Energy Density (Magnitude)", lambda x: np.abs(spectral_energy_density(x)), complex_signal)
+    add_feature_if_selected("Spectral Energy Density (Phase)", lambda x: np.angle(spectral_energy_density(x)), complex_signal)
+    add_feature_if_selected("Spectral Peak Ratio (Magnitude)", lambda x: np.abs(spectral_peak_ratio(x)), complex_signal)
+    add_feature_if_selected("Spectral Peak Ratio (Phase)", lambda x: np.angle(spectral_peak_ratio(x)), complex_signal)
+    add_feature_if_selected("Amplitude Spectral Flatness (Magnitude)", lambda x: np.abs(amplitude_spectral_flatness(x)), complex_signal)
+    add_feature_if_selected("Amplitude Spectral Flatness (Phase)", lambda x: np.angle(amplitude_spectral_flatness(x)), complex_signal)
+    add_feature_if_selected("High-Frequency Spectral Entropy (Cubic)", lambda x: spectral_entropy(apply_kernel(x, kernel="cubic", band="high")), complex_signal)
+    add_feature_if_selected("Low-Frequency Spectral Flatness (Quartic)", lambda x: spectral_flatness(apply_kernel(x, kernel="quartic", band="low")), complex_signal)
+    add_feature_if_selected("Spectral Concentration Around Center (Magnitude)", lambda x: np.abs(spectral_concentration_center(x)), complex_signal)
+    add_feature_if_selected("Spectral Concentration Around Center (Phase)", lambda x: np.angle(spectral_concentration_center(x)), complex_signal)
+    add_feature_if_selected("Frequency Spread Log (Cubic) (Magnitude)", lambda x: np.abs(np.log(frequency_spread(apply_kernel(x, kernel="cubic")))), complex_signal)
+    add_feature_if_selected("Frequency Spread Log (Cubic) (Phase)", lambda x: np.angle(np.log(frequency_spread(apply_kernel(x, kernel="cubic")))), complex_signal)
+    add_feature_if_selected("Spectral Modulation Bandwidth (Quadratic)", lambda x: spectral_modulation_bandwidth(apply_kernel(x, kernel="quadratic")), complex_signal)
+
+    # Entropy Features
     add_feature_if_selected("Frequency Domain Entropy with High-Frequency Emphasis", high_freq_emphasis_entropy, complex_signal)
-    add_feature_if_selected("Autocorrelation Energy Spread", autocorrelation_energy_spread, complex_signal)
-    add_feature_if_selected("Instantaneous Frequency Standard Deviation", instantaneous_frequency_std, real_signal)
+    add_feature_if_selected("Wavelet Entropy Multiple Scales (Quadratic)", lambda x: wavelet_entropy(x, kernel="quadratic"), complex_signal)
+
+    # Temporal Features
+    add_feature_if_selected("Temporal Peak Density (Quadratic)", lambda x: peak_density(apply_kernel(x, kernel="quadratic")), complex_signal)
+    add_feature_if_selected("Interquartile Range of Envelope Peaks (Cubic)", lambda x: interquartile_range(envelope_peaks(apply_kernel(x, kernel="cubic"))), real_signal)
+    add_feature_if_selected("Time-Frequency Energy Concentration (Magnitude)", lambda x: np.abs(time_frequency_energy_concentration(x)), complex_signal)
+    add_feature_if_selected("Time-Frequency Energy Concentration (Phase)", lambda x: np.angle(time_frequency_energy_concentration(x)), complex_signal)
+    add_feature_if_selected("Energy Spread Time-Frequency (Gaussian) (Magnitude)", lambda x: np.abs(energy_spread_time_frequency(apply_kernel(x, kernel="gaussian"))), complex_signal)
+    add_feature_if_selected("Energy Spread Time-Frequency (Gaussian) (Phase)", lambda x: np.angle(energy_spread_time_frequency(apply_kernel(x, kernel="gaussian"))), complex_signal)
     add_feature_if_selected("Temporal Energy Variance (Gaussian)", temporal_energy_variance_gaussian, real_signal)
+
+    # Frequency Features
+    add_feature_if_selected("Frequency Modulation Rate", frequency_modulation_rate, real_signal)
+    add_feature_if_selected("Frequency Spread Variability (Magnitude)", lambda x: np.abs(frequency_spread_variability(x)), complex_signal)
+    add_feature_if_selected("Frequency Spread Variability (Phase)", lambda x: np.angle(frequency_spread_variability(x)), complex_signal)
+
+    # Wavelet Features
+    add_feature_if_selected("Wavelet Transform (Cubic Kernel) (Magnitude)", lambda x: np.abs(wavelet_high_order_kernel(x, kernel="cubic")), real_signal)
+    add_feature_if_selected("Wavelet Transform (Cubic Kernel) (Phase)", lambda x: np.angle(wavelet_high_order_kernel(x, kernel="cubic")), real_signal)
+    add_feature_if_selected("High-Frequency Wavelet Coefficient Mean (Quartic)", lambda x: wavelet_coefficient_mean(x, freq_band="high", kernel="quartic"), complex_signal)
     add_feature_if_selected("Wavelet Energy Concentration (High Frequency)", high_freq_wavelet_energy_concentration, complex_signal)
-    add_feature_if_selected("Frequency Spread Variability", frequency_spread_variability, complex_signal)
+
+    # Spread Features
+    add_feature_if_selected("Frequency Spread Log (Cubic) (Magnitude)", lambda x: np.abs(frequency_spread_log_cubic(x)), complex_signal)
+    add_feature_if_selected("Frequency Spread Log (Cubic) (Phase)", lambda x: np.angle(frequency_spread_log_cubic(x)), complex_signal)
+    add_feature_if_selected("Normalized High-Frequency Power Ratio", normalized_high_freq_power_ratio, complex_signal)
+
+    # Envelope Features
     add_feature_if_selected("Envelope Power Variability in Frequency Bands", envelope_power_variability, real_signal)
-    add_feature_if_selected("Instantaneous Frequency Rate of Change", instantaneous_frequency_rate_of_change, real_signal)
-    add_feature_if_selected("Fifth Order Cumulant", fifth_order_cumulant, complex_signal)
-    add_feature_if_selected("Instantaneous Phase Deviation Rate", instantaneous_phase_deviation_rate, complex_signal)
-    add_feature_if_selected("Constellation Density Measure", constellation_density, complex_signal)
-    add_feature_if_selected("Spectral Energy Density (Real)", lambda x: np.real(spectral_energy_density(x)), real_signal)
-    add_feature_if_selected("Spectral Peak Ratio (Real)", lambda x: np.real(spectral_peak_ratio(x)), real_signal)
-    add_feature_if_selected("Amplitude Spectral Flatness (Real)", lambda x: np.real(amplitude_spectral_flatness(x)), real_signal)
-    add_feature_if_selected("Spectral Energy Density (Imag)", lambda x: np.imag(spectral_energy_density(x)), np.imag(complex_signal))
-    add_feature_if_selected("Spectral Peak Ratio (Imag)", lambda x: np.imag(spectral_peak_ratio(x)), np.imag(complex_signal))
-    add_feature_if_selected("Amplitude Spectral Flatness (Imag)", lambda x: np.imag(amplitude_spectral_flatness(x)), np.imag(complex_signal))
+
+    # Adaptive Features
+    add_feature_if_selected("Adaptive Bandwidth Concentration (Gaussian) (Magnitude)", lambda x: np.abs(bandwidth_concentration(apply_kernel(x, kernel="gaussian", adaptive=True))), complex_signal)
+    add_feature_if_selected("Adaptive Bandwidth Concentration (Gaussian) (Phase)", lambda x: np.angle(bandwidth_concentration(apply_kernel(x, kernel="gaussian", adaptive=True))), complex_signal)
+    add_feature_if_selected("Adaptive Gaussian Filtering (Frequency Domain)", adaptive_gaussian_filtering, complex_signal)
+
+    # Energy Concentration Features
+    add_feature_if_selected("Mid-Band Energy Concentration (Polynomial) (Magnitude)", lambda x: np.abs(energy_concentration(apply_kernel(x, kernel="polynomial", band="mid"))), complex_signal)
+    add_feature_if_selected("Mid-Band Energy Concentration (Polynomial) (Phase)", lambda x: np.angle(energy_concentration(apply_kernel(x, kernel="polynomial", band="mid"))), complex_signal)
+
+    # Spectral Flatness 
+    add_feature_if_selected("Spectral Flatness (Magnitude)", lambda x: np.abs(spectral_flatness(x)), complex_signal)
+    add_feature_if_selected("Spectral Flatness (Phase)", lambda x: np.angle(spectral_flatness(x)), complex_signal)
+
+    # Spectral Asymmetry 
+    add_feature_if_selected("Spectral Asymmetry (Magnitude)", lambda x: np.abs(compute_spectral_asymmetry(x)), complex_signal)
+    add_feature_if_selected("Spectral Asymmetry (Phase)", lambda x: np.angle(compute_spectral_asymmetry(x)), complex_signal)
+
+    # Frequency Spread Log (Cubic) 
+    add_feature_if_selected("Frequency Spread Log Cubic (Magnitude)", lambda x: np.abs(frequency_spread_log_cubic(x)), complex_signal)
+    add_feature_if_selected("Frequency Spread Log Cubic (Phase)", lambda x: np.angle(frequency_spread_log_cubic(x)), complex_signal)
+
+    # Envelope Power Variability 
+    add_feature_if_selected("Envelope Power Variability (Magnitude)", lambda x: np.abs(envelope_power_variability(x)), complex_signal)
+    add_feature_if_selected("Envelope Power Variability (Phase)", lambda x: np.angle(envelope_power_variability(x)), complex_signal)
+
+    # Temporal Energy Variance (Gaussian) 
+    add_feature_if_selected("Temporal Energy Variance Gaussian (Magnitude)", lambda x: np.abs(temporal_energy_variance_gaussian(x)), complex_signal)
+    add_feature_if_selected("Temporal Energy Variance Gaussian (Phase)", lambda x: np.angle(temporal_energy_variance_gaussian(x)), complex_signal)
+
+    # Band-Pass Filtered RMS of Signal Envelope 
+    add_feature_if_selected("Band-Pass Filtered RMS Envelope (Magnitude)", lambda x: np.abs(band_pass_filtered_rms(x)), complex_signal)
+    add_feature_if_selected("Band-Pass Filtered RMS Envelope (Phase)", lambda x: np.angle(band_pass_filtered_rms(x)), complex_signal)
+
+    # Adaptive Gaussian Filtering (Frequency Domain) 
+    add_feature_if_selected("Adaptive Gaussian Filtering (Magnitude)", lambda x: np.abs(adaptive_gaussian_filtering(x)), complex_signal)
+    add_feature_if_selected("Adaptive Gaussian Filtering (Phase)", lambda x: np.angle(adaptive_gaussian_filtering(x)), complex_signal)
+
+    # Mid-Band Energy Concentration (Polynomial) 
+    add_feature_if_selected("Mid-Band Energy Concentration (Magnitude)", lambda x: np.abs(energy_concentration(x)), complex_signal)
+    add_feature_if_selected("Mid-Band Energy Concentration (Phase)", lambda x: np.angle(energy_concentration(x)), complex_signal)
+
+
+    # Experimental WBFM Features
+    add_feature_if_selected("Frequency Domain Entropy with High-Frequency Emphasis", lambda x: frequency_domain_entropy(x, low_cut=0.5, high_cut=1.0), complex_signal)
+    add_feature_if_selected("Frequency Domain Entropy with Mid-Frequency Emphasis", lambda x: frequency_domain_entropy(x, low_cut=0.25, high_cut=0.5), complex_signal)
+    add_feature_if_selected("Frequency Domain Entropy with Low-Frequency Emphasis", lambda x: frequency_domain_entropy(x, low_cut=0.0, high_cut=0.25), complex_signal)
+    add_feature_if_selected("Spectral Peak Count (Magnitude)", spectral_peak_count, complex_signal)
+    add_feature_if_selected("Spectral Peak Average Amplitude (Magnitude)", spectral_peak_average_amplitude, complex_signal)
+    add_feature_if_selected("Spectral Peak Energy Ratio (Magnitude)", spectral_peak_energy_ratio, complex_signal)
+    add_feature_if_selected("Spectral Peak Width (Magnitude)", spectral_peak_width, complex_signal)
+    add_feature_if_selected("Peak-to-Average Ratio (Spectral Peaks)", peak_to_average_ratio_spectral, complex_signal)
+    add_feature_if_selected("Spectral Kurtosis (Peaks Only)", spectral_kurtosis_peaks, complex_signal)
+    add_feature_if_selected("Peak Frequency Variation (Magnitude)", peak_frequency_variation, complex_signal)
+    add_feature_if_selected("Total Spectral Energy in Peaks (Magnitude)", total_spectral_energy_peaks, complex_signal)
+    add_feature_if_selected("Spectral Flatness in Peak Band (Magnitude)", spectral_flatness_peak_band, complex_signal)
+    add_feature_if_selected("Spectral Energy Spread in Peaks (Magnitude)", spectral_energy_spread_peaks, complex_signal)
+    add_feature_if_selected("Maximum Peak Amplitude (Magnitude)", max_peak_amplitude, complex_signal)
+    add_feature_if_selected("Minimum Peak Amplitude (Magnitude)", min_peak_amplitude, complex_signal)
+    add_feature_if_selected("Spectral Peak Density (Peaks per Hz)", spectral_peak_density, complex_signal)
+    add_feature_if_selected("Frequency Range of Spectral Peaks", frequency_range_of_peaks, complex_signal)
 
     return feature_dict
+
+
+
+
+# 1-3. Frequency Domain Entropy with High-Frequency, Mid-Frequency, and Low-Frequency Emphasis
+def frequency_domain_entropy(signal, fs=1.0, low_cut=0.0, high_cut=1.0):
+    freqs, power_spectrum = welch(signal, fs=fs)
+    band_mask = (freqs >= low_cut) & (freqs <= high_cut)
+    power_band = power_spectrum[band_mask] / np.sum(power_spectrum[band_mask] + 1e-10)
+    return entropy(power_band)
+
+# 4. Spectral Peak Count (Magnitude)
+def spectral_peak_count(signal):
+    magnitude_spectrum = np.abs(fft(signal))
+    peaks, _ = find_peaks(magnitude_spectrum)
+    return len(peaks)
+
+# 5. Spectral Peak Average Amplitude (Magnitude)
+def spectral_peak_average_amplitude(signal):
+    magnitude_spectrum = np.abs(fft(signal))
+    peaks, _ = find_peaks(magnitude_spectrum)
+    return np.mean(magnitude_spectrum[peaks]) if peaks.size > 0 else 0
+
+# 6. Spectral Peak Energy Ratio (Magnitude)
+def spectral_peak_energy_ratio(signal):
+    magnitude_spectrum = np.abs(fft(signal))**2
+    peaks, _ = find_peaks(magnitude_spectrum)
+    peak_energy = np.sum(magnitude_spectrum[peaks])
+    total_energy = np.sum(magnitude_spectrum)
+    return peak_energy / (total_energy + 1e-10)
+
+# 7. Spectral Peak Width (Magnitude)
+def spectral_peak_width(signal):
+    magnitude_spectrum = np.abs(fft(signal))
+    peaks, properties = find_peaks(magnitude_spectrum, width=5)
+    widths = properties['widths'] if 'widths' in properties else np.array([0])
+    return np.mean(widths) if widths.size > 0 else 0
+
+# 8. Peak-to-Average Ratio (Spectral Peaks)
+def peak_to_average_ratio_spectral(signal):
+    magnitude_spectrum = np.abs(fft(signal))
+    peaks, _ = find_peaks(magnitude_spectrum)
+    peak_amplitude = np.max(magnitude_spectrum[peaks]) if peaks.size > 0 else 0
+    average_amplitude = np.mean(magnitude_spectrum)
+    return peak_amplitude / (average_amplitude + 1e-10)
+
+# 9. Spectral Kurtosis (Peaks Only)
+def spectral_kurtosis_peaks(signal):
+    magnitude_spectrum = np.abs(fft(signal))
+    peaks, _ = find_peaks(magnitude_spectrum)
+    return np.mean((magnitude_spectrum[peaks] - np.mean(magnitude_spectrum[peaks]))**4) / (np.std(magnitude_spectrum[peaks])**4 + 1e-10) if peaks.size > 0 else 0
+
+# 10. Peak Frequency Variation (Magnitude)
+def peak_frequency_variation(signal):
+    magnitude_spectrum = np.abs(fft(signal))
+    peaks, _ = find_peaks(magnitude_spectrum)
+    peak_freqs = np.diff(peaks)
+    return np.var(peak_freqs) if len(peak_freqs) > 1 else 0
+
+# 11. Total Spectral Energy in Peaks (Magnitude)
+def total_spectral_energy_peaks(signal):
+    magnitude_spectrum = np.abs(fft(signal))**2
+    peaks, _ = find_peaks(magnitude_spectrum)
+    return np.sum(magnitude_spectrum[peaks]) if peaks.size > 0 else 0
+
+# 12. Spectral Flatness in Peak Band (Magnitude)
+def spectral_flatness_peak_band(signal):
+    magnitude_spectrum = np.abs(fft(signal))
+    peaks, _ = find_peaks(magnitude_spectrum)
+    peak_band = magnitude_spectrum[peaks]
+    geometric_mean = np.exp(np.mean(np.log(peak_band + 1e-10)))  # Avoid log(0) by adding a small value
+    arithmetic_mean = np.mean(peak_band)
+    return geometric_mean / (arithmetic_mean + 1e-10) if peaks.size > 0 else 0
+
+# 13. Spectral Energy Spread in Peaks (Magnitude)
+def spectral_energy_spread_peaks(signal):
+    magnitude_spectrum = np.abs(fft(signal))**2
+    peaks, _ = find_peaks(magnitude_spectrum)
+    peak_band_energy = magnitude_spectrum[peaks] if peaks.size > 0 else np.array([0])
+    return np.std(peak_band_energy)
+
+# 14. Maximum Peak Amplitude (Magnitude)
+def max_peak_amplitude(signal):
+    magnitude_spectrum = np.abs(fft(signal))
+    peaks, _ = find_peaks(magnitude_spectrum)
+    return np.max(magnitude_spectrum[peaks]) if peaks.size > 0 else 0
+
+# 15. Minimum Peak Amplitude (Magnitude)
+def min_peak_amplitude(signal):
+    magnitude_spectrum = np.abs(fft(signal))
+    peaks, _ = find_peaks(magnitude_spectrum)
+    return np.min(magnitude_spectrum[peaks]) if peaks.size > 0 else 0
+
+# 16. Spectral Peak Density (Peaks per Hz)
+def spectral_peak_density(signal, fs=1.0):
+    magnitude_spectrum = np.abs(fft(signal))
+    peaks, _ = find_peaks(magnitude_spectrum)
+    return len(peaks) / fs if fs > 0 else 0
+
+# 17. Frequency Range of Spectral Peaks
+def frequency_range_of_peaks(signal, fs=1.0):
+    magnitude_spectrum = np.abs(fft(signal))
+    freqs = fftfreq(len(magnitude_spectrum), 1/fs)
+    peaks, _ = find_peaks(magnitude_spectrum)
+    if peaks.size > 0:
+        min_peak_freq = freqs[peaks].min()
+        max_peak_freq = freqs[peaks].max()
+        return max_peak_freq - min_peak_freq
+    return 0
+
+
+def magnitude_phase_features(complex_signal, feature_func):
+    """
+    Helper function to compute the magnitude and phase of a feature derived from a complex signal.
+    
+    Parameters:
+        complex_signal (ndarray): The complex signal.
+        feature_func (function): The feature extraction function to apply to the complex signal.
+    
+    Returns:
+        tuple: Magnitude and phase of the feature.
+    """
+    feature_value = feature_func(complex_signal)
+    magnitude = np.abs(feature_value)
+    phase = np.angle(feature_value)
+    return magnitude, phase
 
         
 def spectral_energy_density(signal):

@@ -5,6 +5,29 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 import seaborn as sns
 
+
+def convert_and_clean_data(data):
+    """
+    Convert complex data to real, replacing -inf with the minimum float32 value,
+    +inf with the maximum float32 value, and NaN with 0.
+    
+    Parameters:
+        data (np.ndarray): Complex or real-valued data array.
+        
+    Returns:
+        np.ndarray: Cleaned real-valued data array.
+    """
+    # Convert complex to real by taking only the real part
+    data_real = np.real(data)
+    
+    # Replace -inf, +inf, and NaN values
+    data_real = np.where(np.isinf(data_real) & (data_real < 0), np.finfo(np.float32).min, data_real)
+    data_real = np.where(np.isinf(data_real) & (data_real > 0), np.finfo(np.float32).max, data_real)
+    data_real = np.where(np.isnan(data_real), 0, data_real)
+    
+    return data_real
+
+
 def clean_training_data(X, y):
     """
     Cleans X and y by ensuring that all elements are scalars and removing infinities.
