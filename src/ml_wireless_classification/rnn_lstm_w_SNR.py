@@ -57,15 +57,6 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
 
         for (mod_type, snr), signals in self.data.items():
             for signal in signals:
-                # # Separate real and imaginary parts for the IQ signal
-                # real_signal = signal[0]
-                # imag_signal = signal[1]
-                # # Normalize each channel separately to the range [-1, 1]
-                # max_real = np.max(np.abs(real_signal))
-                # max_imag = np.max(np.abs(imag_signal))
-                # real_signal = real_signal / max_real if max_real != 0 else real_signal
-                # imag_signal = imag_signal / max_imag if max_imag != 0 else imag_signal
-
                 # # Stack the normalized real and imaginary parts to form a (128, 2) array
                 # iq_signal = np.vstack([real_signal, imag_signal]).T  # Shape: (128, 2)
                 iq_signal = np.vstack([signal[0], signal[1]]).T
