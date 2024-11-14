@@ -3,6 +3,14 @@ from scipy.signal import hilbert, stft
 from scipy.stats import kurtosis, skew, entropy
 from scipy.signal import find_peaks, hilbert, welch
 from scipy.fft import fft, fftfreq
+# Feature Extraction Helper Functions
+from scipy.signal import butter, filtfilt
+
+import pickle
+from scipy.signal import hilbert, welch
+from scipy.fft import fft
+from scipy.ndimage import gaussian_filter1d
+import pywt
 
 def compute_fft_features(signal):
     fft_result = np.fft.fft(signal)
@@ -336,60 +344,375 @@ def spectral_peaks_bandwidth(signal, threshold_ratio=0.5):
 def zero_crossing_rate(signal):
     return ((signal[:-1] * signal[1:]) < 0).sum() / len(signal)
 
-def clean_training_data(X, y):
+
+# Kernel application function
+def apply_kernel(signal, kernel="linear", band="full", adaptive=False):
+    """Applies a specified kernel to the signal."""
+    if kernel == "cubic":
+        return signal ** 3
+    elif kernel == "quartic":
+        return signal ** 4
+    elif kernel == "polynomial":
+        poly = np.poly1d([1, 0, -1])  # Example polynomial
+        return poly(signal)
+    elif kernel == "gaussian":
+        sigma = 1 if not adaptive else max(0.1, min(2, np.std(signal) / np.mean(signal)))
+        return gaussian_filter1d(signal, sigma=sigma)
+    else:
+        return signal  # Linear (default) does nothing
+
+
+def apply_bandpass_filter(signal, low_cut, high_cut, fs=1.0, order=4):
     """
-    Cleans X and y by ensuring that all elements are scalars and removing infinities.
-    Prints a message if a sequence (list, tuple, array) or non-numeric value is found.
-    """
-    def check_and_clean_array(arr, array_name):
-        cleaned_arr = []
-        for i, row in enumerate(arr):
-            cleaned_row = []
-            for j, value in enumerate(row):
-                # Check if value is scalar
-                if np.isscalar(value):
-                    # Check for infinities or non-finite values
-                    if np.isinf(value) or np.isnan(value) or value > np.finfo(np.float32).max:
-                        # print(f"Warning: {array_name}[{i}][{j}] has an infinity or too large value. Setting to 0.")
-                        cleaned_row.append(0)  # Replace infinities or overly large values with 0
-                    else:
-                        cleaned_row.append(value)
-                elif isinstance(value, (list, tuple, np.ndarray)):
-                    # If it's a sequence, take the first element as a workaround (optional)
-                    sub_value = value[0] if len(value) > 0 else 0
-                    if np.isinf(sub_value) or np.isnan(sub_value) or sub_value > np.finfo(np.float32).max:
-                        # print(f"Warning: {array_name}[{i}][{j}] contains infinity or too large in sequence. Setting to 0.")
-                        sub_value = 0
-                    cleaned_row.append(sub_value)
-                    # print(f"Warning: {array_name}[{i}][{j}] is a sequence. Taking the first element.")
-                elif isinstance(value, str):
-                    # Handle string values with a warning
-                    # print(f"Warning: {array_name}[{i}][{j}] is a string. Removing and setting to 0.")
-                    cleaned_row.append(0)
-                else:
-                    # print(f"Warning: Unexpected data type at {array_name}[{i}][{j}]: {type(value)}")
-                    cleaned_row.append(0)  # Default to 0 if type is unexpected
-            cleaned_arr.append(cleaned_row)
-        
-        # Ensure cleaned_arr is a 2D array of fixed-length rows
-        max_length = max(len(row) for row in cleaned_arr)
-        # Pad rows with zeros if they are shorter than max_length
-        cleaned_arr = [row + [0] * (max_length - len(row)) for row in cleaned_arr]
-        
-        return np.array(cleaned_arr, dtype=float)
+    Apply a Butterworth bandpass filter to a signal.
     
-    # Clean X and y
-    X_cleaned = check_and_clean_array(X, "X_train")
-    y_cleaned = np.array([elem if np.isscalar(elem) else elem[0] for elem in y], dtype=float)
-
-    return X_cleaned, y_cleaned
-
-def ensure_2d(arr, name):
+    Parameters:
+    - signal: array-like, the input signal
+    - low_cut: float, the low cutoff frequency as a fraction of the Nyquist rate
+    - high_cut: float, the high cutoff frequency as a fraction of the Nyquist rate
+    - fs: float, the sampling frequency of the signal (default 1.0)
+    - order: int, the order of the Butterworth filter (default 4)
+    
+    Returns:
+    - filtered_signal: array-like, the bandpass-filtered signal
     """
-    Ensures the array is 2D by reshaping if necessary.
-    """
-    if arr.ndim == 1:
-        print(f"Warning: {name} is 1-dimensional. Reshaping to 2D.")
-        arr = arr.reshape(-1, 1)
-    return arr
+    nyquist = 0.5 * fs
+    low = low_cut / nyquist
+    high = high_cut / nyquist
+    b, a = butter(order, [low, high], btype='band')
+    filtered_signal = filtfilt(b, a, signal)
+    return filtered_signal
 
+# Kernelized Frequency Domain Features
+def spectral_entropy(signal):
+    psd = np.abs(fft(signal)) ** 2
+    psd_norm = psd / np.sum(psd)
+    return -np.sum(psd_norm * np.log(psd_norm + 1e-10))
+
+def spectral_flatness(signal):
+    psd = np.abs(fft(signal)) ** 2
+    geometric_mean = np.exp(np.mean(np.log(psd + 1e-10)))
+    arithmetic_mean = np.mean(psd)
+    return geometric_mean / (arithmetic_mean + 1e-10)
+
+def energy_concentration(signal, low_cut=0.1, high_cut=0.5):
+    f, Pxx = welch(signal)
+    band_mask = (f >= low_cut) & (f <= high_cut)
+    return np.sum(Pxx[band_mask])
+
+def bandwidth_concentration(signal):
+    psd = np.abs(fft(signal)) ** 2
+    smooth_psd = gaussian_filter1d(psd, sigma=1)
+    return np.sum(smooth_psd)
+
+def frequency_spread(signal):
+    f, Pxx = welch(signal)
+    mean_freq = np.sum(f * Pxx) / np.sum(Pxx)
+    return np.log(np.sqrt(np.sum((f - mean_freq) ** 2 * Pxx) / np.sum(Pxx)))
+
+# Wavelet-Based Multi-Scale Analysis
+def wavelet_power_variance(signal, kernel="morlet"):
+    coeffs = pywt.wavedec(signal, kernel, level=4)
+    power_peaks = [np.max(np.abs(c)**2) for c in coeffs[1:]]
+    return np.var(power_peaks)
+
+def wavelet_entropy(signal, kernel="quadratic"):
+    coeffs = pywt.wavedec(signal, 'db1', level=4)
+    entropy_sum = np.sum([-np.sum(np.abs(c) * np.log(np.abs(c) + 1e-10)) for c in coeffs])
+    return np.power(entropy_sum, 2)  # Quadratic kernel
+
+def wavelet_coefficient_mean(signal, freq_band="high", kernel="quartic"):
+    coeffs = pywt.wavedec(signal, 'db1', level=4)
+    high_band = coeffs[-1]  # Assuming the highest band for simplicity
+    return np.mean(high_band)
+
+# Time-Domain Features with Higher-Order Kernels
+def zero_crossing_rate(signal):
+    zero_crossings = np.where(np.diff(np.sign(signal)))[0]
+    return len(zero_crossings) / len(signal)
+
+def modulation_index(signal):
+    envelope = np.abs(hilbert(signal))
+    return np.var(envelope) / np.mean(envelope)
+
+def phase_change_rate(signal):
+    phase_diff = np.diff(np.angle(signal))
+    return np.var(phase_diff)
+
+def frequency_asymmetry(signal):
+    inst_freq = np.diff(np.unwrap(np.angle(hilbert(signal))))
+    return np.mean(inst_freq ** 3)
+
+def rms_signal_envelope(signal):
+    envelope = np.abs(hilbert(signal))
+    return np.sqrt(np.mean(envelope ** 2))
+
+# Higher-Order Statistical Features
+def fourth_order_amplitude_moment(signal):
+    centered_signal = signal - np.mean(signal)
+    return np.mean(centered_signal**4)
+
+def skewness_of_phase_changes(signal):
+    phase_diff = np.diff(np.angle(signal))
+    return np.power(skew(phase_diff), 3)
+
+def cumulant(signal, order=6):
+    return np.mean(signal ** order)
+
+# Cross-Domain Features (Time-Frequency)
+def frequency_variance(signal):
+    inst_freq = np.diff(np.unwrap(np.angle(signal)))
+    return np.var(inst_freq)
+
+def spectral_modulation_bandwidth(signal):
+    f, Pxx = welch(signal)
+    return np.sqrt(np.mean(f ** 2 * Pxx) - np.mean(f * Pxx) ** 2)
+
+# Phase and Instantaneous Amplitude-Related Features
+def phase_modulation_skewness(signal):
+    phase_mod = np.angle(signal)
+    return np.power(skew(phase_mod), 4)
+
+def amplitude_asymmetry(signal):
+    envelope = np.abs(hilbert(signal))
+    return skew(envelope)
+
+def correlation(phase, envelope):
+    return np.corrcoef(phase, envelope)[0, 1]
+
+# Energy Spread in Time-Frequency
+def energy_spread_time_frequency(signal):
+    f, Pxx = welch(signal)
+    return np.std(Pxx)
+
+# Temporal peak density
+def peak_density(signal):
+    peaks = np.diff(np.sign(np.diff(signal))) < 0
+    return np.sum(peaks) / len(signal)
+
+# Autocorrelation Skewness
+def autocorrelation_skewness(signal):
+    autocorr = np.correlate(signal, signal, mode='full')
+    return skew(autocorr)
+
+# Interquartile Range (IQR) of Envelope Peaks
+def interquartile_range(signal):
+    envelope = np.abs(hilbert(signal))
+    return np.percentile(envelope, 75) - np.percentile(envelope, 25)
+
+# Interquartile range (IQR) of envelope peaks
+def envelope_peaks(signal):
+    envelope = np.abs(hilbert(signal))
+    return envelope
+
+# Correlation between phase and envelope
+def phase_envelope(signal):
+    return np.abs(hilbert(signal)), np.angle(signal)
+
+
+# WBFM-Specific Feature Functions
+
+def frequency_modulation_rate(signal):
+    inst_phase = np.unwrap(np.angle(signal))
+    inst_freq = np.diff(inst_phase)
+    return np.mean(np.abs(np.diff(inst_freq)))
+
+def instantaneous_frequency_deviation_std(signal):
+    inst_phase = np.unwrap(np.angle(signal))
+    inst_freq = np.diff(inst_phase)
+    return np.std(inst_freq)
+
+def high_frequency_power_ratio(signal, cutoff=0.5):
+    fft_values = np.fft.fft(signal)
+    freqs = np.fft.fftfreq(len(signal))
+    high_freq_power = np.sum(np.abs(fft_values[np.abs(freqs) > cutoff])**2)
+    total_power = np.sum(np.abs(fft_values)**2)
+    return high_freq_power / total_power if total_power > 0 else 0
+
+def spectral_concentration_center(signal, center_freq=0):
+    fft_values = np.fft.fft(signal)
+    freqs = np.fft.fftfreq(len(signal))
+    center_band = (freqs >= center_freq - 0.1) & (freqs <= center_freq + 0.1)
+    center_energy = np.sum(np.abs(fft_values[center_band])**2)
+    total_energy = np.sum(np.abs(fft_values)**2)
+    return center_energy / total_energy if total_energy > 0 else 0
+
+def energy_spread_time_frequency(signal, fs=1.0):
+    f, t, Zxx = stft(signal, fs=fs, nperseg=128)
+    return np.std(np.abs(Zxx))
+
+def zero_crossing_density_frequency(signal):
+    fft_values = np.fft.fft(signal)
+    return np.mean(np.diff(np.sign(np.real(fft_values))) != 0)
+
+def frequency_spread_log_cubic(signal):
+    f, Pxx = welch(signal)
+    mean_freq = np.sum(f * Pxx) / np.sum(Pxx)
+    spread = np.log(np.sqrt(np.sum((f - mean_freq) ** 2 * Pxx) / np.sum(Pxx)) + 1e-10)
+    return spread ** 3  # Cubic kernel applied
+
+def adaptive_gaussian_filtering(signal):
+    psd = np.abs(np.fft.fft(signal)) ** 2
+    sigma = max(0.1, min(2, np.std(psd) / np.mean(psd)))
+    filtered_psd = gaussian_filter1d(psd, sigma=sigma)
+    return np.sum(filtered_psd)
+
+def wavelet_high_order_kernel(signal, kernel="cubic"):
+    coeffs = pywt.wavedec(signal, 'db4', level=4)
+    if kernel == "cubic":
+        return np.mean([np.power(np.abs(c), 3).mean() for c in coeffs[1:]])
+    elif kernel == "quartic":
+        return np.mean([np.power(np.abs(c), 4).mean() for c in coeffs[1:]])
+
+def frequency_modulation_rate(signal, fs=1.0):
+    inst_freq = np.diff(np.unwrap(np.angle(hilbert(signal))))
+    return np.mean(np.abs(np.diff(inst_freq))) * fs
+
+def high_frequency_power_ratio(signal, cutoff=0.5, fs=1.0):
+    f, Pxx = welch(signal, fs=fs)
+    high_freq_power = np.sum(Pxx[f > cutoff])
+    total_power = np.sum(Pxx)
+    return high_freq_power / total_power if total_power > 0 else 0
+
+def zero_crossing_density_frequency(signal):
+    fft_signal = np.fft.fft(signal)
+    crossings = np.where(np.diff(np.sign(np.real(fft_signal))))[0]
+    return len(crossings) / len(signal)
+
+def zero_crossing_density_frequency(signal):
+    fft_signal = np.fft.fft(signal)
+    crossings = np.where(np.diff(np.sign(np.real(fft_signal))))[0]
+    return len(crossings) / len(signal)
+
+def spectral_concentration_center(signal, center_freq=0.5, bandwidth=0.1, fs=1.0):
+    f, Pxx = welch(signal, fs=fs)
+    center_band = (f > center_freq - bandwidth) & (f < center_freq + bandwidth)
+    return np.sum(Pxx[center_band]) / np.sum(Pxx)
+
+def inst_freq_deviation_std(signal):
+    inst_freq = np.diff(np.unwrap(np.angle(hilbert(signal))))
+    return np.std(inst_freq)
+
+def rms_signal_envelope(signal):
+    envelope = np.abs(hilbert(signal))
+    return np.sqrt(np.mean(envelope ** 2))
+
+def amplitude_asymmetry(signal):
+    envelope = np.abs(hilbert(signal))
+    return skew(envelope)
+
+def spectral_modulation_bandwidth(signal, fs=1.0):
+    f, Pxx = welch(signal, fs=fs)
+    return np.sqrt(np.mean(f ** 2 * Pxx) - np.mean(f * Pxx) ** 2)
+
+def wavelet_transform_cubic(signal, level=4):
+    coeffs = pywt.wavedec(signal, 'db1', level=level)
+    return np.mean(np.array([np.mean(np.abs(c) ** 3) for c in coeffs]))
+
+
+# Band-Pass Filtered RMS of Signal Envelope
+def band_pass_filtered_rms(signal, low_cut=0.05, high_cut=0.3):
+    filtered_signal = apply_bandpass_filter(signal, low_cut, high_cut)
+    envelope = np.abs(hilbert(filtered_signal))
+    return np.sqrt(np.mean(envelope ** 2))
+
+# Time-Frequency Energy Concentration
+def time_frequency_energy_concentration(signal, low_freq=0.05, high_freq=0.3):
+    f, t, Sxx = stft(signal, nperseg=256)
+    band_mask = (f >= low_freq) & (f <= high_freq)
+    energy_concentration = np.sum(Sxx[band_mask, :]) / np.sum(Sxx)
+    return energy_concentration
+
+# Peak Density in Filtered Frequency Domain
+def peak_density_frequency_domain(signal):
+    fft_signal = np.abs(fft(signal))
+    smooth_fft = gaussian_filter1d(fft_signal, sigma=3)
+    peaks = find_peaks(smooth_fft, height=0.1 * np.max(smooth_fft))[0]
+    return len(peaks) / len(smooth_fft)
+
+# Normalized High-Frequency Power Ratio
+def normalized_high_freq_power_ratio(signal, high_cut=0.4):
+    fft_signal = np.abs(fft(signal)) ** 2
+    freqs = np.fft.fftfreq(len(signal))
+    high_freq_power = np.sum(fft_signal[np.abs(freqs) > high_cut])
+    total_power = np.sum(fft_signal)
+    return high_freq_power / (total_power * (1 - high_cut))
+
+# Frequency Domain Entropy with High-Frequency Emphasis
+def high_freq_emphasis_entropy(signal, high_freq_cut=0.3):
+    fft_signal = np.abs(fft(signal)) ** 2
+    psd = fft_signal / np.sum(fft_signal)
+    high_freqs = psd[len(psd) // 2:]
+    high_freq_entropy = -np.sum(high_freqs * np.log2(high_freqs + 1e-10))
+    return high_freq_entropy
+
+# Autocorrelation Energy Spread
+def autocorrelation_energy_spread(signal):
+    autocorr = np.correlate(signal, signal, mode="full")
+    return np.var(autocorr)
+
+# Instantaneous Frequency Standard Deviation
+def instantaneous_frequency_std(signal):
+    inst_freq = np.diff(np.angle(hilbert(signal)))
+    return np.std(inst_freq)
+
+# Temporal Energy Variance (Gaussian)
+def temporal_energy_variance_gaussian(signal):
+    envelope = np.abs(hilbert(signal))
+    smooth_envelope = gaussian_filter1d(envelope, sigma=3)
+    return np.var(smooth_envelope)
+
+# Wavelet Energy Concentration (High Frequency)
+def high_freq_wavelet_energy_concentration(signal):
+    coeffs = pywt.wavedec(signal, "db1", level=4)
+    high_freq_coeffs = coeffs[-1]  # Highest frequency coefficients
+    return np.sum(np.abs(high_freq_coeffs) ** 2)
+
+
+
+# 1. Frequency Spread Variability
+def frequency_spread_variability(signal, window_size=64):
+    # Split signal into windows
+    variances = []
+    for i in range(0, len(signal) - window_size, window_size):
+        window = signal[i:i + window_size]
+        f, Pxx = welch(window)
+        mean_freq = np.sum(f * Pxx) / np.sum(Pxx)
+        variance = np.sqrt(np.sum((f - mean_freq) ** 2 * Pxx) / np.sum(Pxx))
+        variances.append(variance)
+    return np.var(variances)
+
+# 2. Envelope Power Variability in Frequency Bands
+def envelope_power_variability(signal, num_bands=4):
+    envelope = np.abs(hilbert(signal))
+    f, Pxx = welch(envelope)
+    band_size = len(f) // num_bands
+    band_variances = []
+    for i in range(num_bands):
+        band_power = np.sum(Pxx[i * band_size:(i + 1) * band_size])
+        band_variances.append(band_power)
+    return np.var(band_variances)
+
+# 3. Instantaneous Frequency Rate of Change
+def instantaneous_frequency_rate_of_change(signal):
+    inst_freq = np.diff(np.unwrap(np.angle(hilbert(signal))))
+    rate_of_change = np.diff(inst_freq)
+    return np.std(rate_of_change)
+
+# 4. Higher-Order Cumulants (5th Order)
+def fifth_order_cumulant(signal):
+    centered_signal = signal - np.mean(signal)
+    return np.mean(centered_signal ** 5)
+
+# 5. Instantaneous Phase Deviation Rate
+def instantaneous_phase_deviation_rate(signal):
+    phase = np.unwrap(np.angle(signal))
+    phase_diff = np.diff(phase)
+    return np.std(phase_diff)
+
+# 6. Constellation Density Measure
+def constellation_density(signal, num_bins=10):
+    real_part = np.real(signal)
+    imag_part = np.imag(signal)
+    H, _, _ = np.histogram2d(real_part, imag_part, bins=num_bins)
+    return np.var(H)  # Measure variance in density
