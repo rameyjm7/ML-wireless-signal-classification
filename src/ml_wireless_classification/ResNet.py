@@ -48,10 +48,7 @@ def residual_block(x, filters, kernel_size=(3, 3), stride=(1, 1)):
     x = Activation('relu')(x)
     return x
 
-
-
-
-class ModulationLSTMClassifier(BaseModulationClassifier):
+class ModulationClassifier(BaseModulationClassifier):
     def __init__(
         self, data_path, model_path="saved_model.h5", stats_path="model_stats.json"
     ):
@@ -83,9 +80,8 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
                 iq_array = iq_array[:128]  # Truncate if needed to match fft_signal length
 
                 # Calculate FFT and create the combined signal
-                fft_signal = np.fft.fft(signal[0] + 1j * signal[1], n=128).real  # Use real part for Conv1D
                 snr_signal = np.full((128, 1), snr)
-                combined_signal = np.hstack([iq_array, fft_signal.reshape(-1, 1), snr_signal])
+                combined_signal = np.hstack([iq_array, snr_signal])
 
                 X.append(combined_signal)
                 y.append(mod_type)
@@ -100,6 +96,9 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
         )
         X_train = X_train.reshape(-1, X_train.shape[1], X_train.shape[2])
         X_test = X_test.reshape(-1, X_test.shape[1], X_test.shape[2])
+        
+        X_train = X_train[..., np.newaxis]  # Add channel dimension for ResNet
+        X_test = X_test[..., np.newaxis]
 
         return X_train, X_test, y_train, y_test
 
@@ -200,12 +199,6 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
         # Prepare the data
         X_train, X_test, y_train, y_test = self.prepare_data()
 
-        # Reshape data to add channel dimension for CNN
-        # Assuming X_train and X_test are in shape (samples, height, width)
-        # we need to reshape them to (samples, height, width, 1)
-        X_train = X_train[..., np.newaxis]  # Adds a single channel dimension
-        X_test = X_test[..., np.newaxis]    # Adds a single channel dimension
-
         # Build the model (load if it exists)
         input_shape = X_train.shape[1:]  # Now includes the new channel dimension
         num_classes = len(np.unique(y_train))  # Number of unique modulation types
@@ -241,6 +234,5 @@ if __name__ == "__main__":
     print("Stats path:", stats_path)
 
     # Initialize the classifier
-    classifier = ModulationLSTMClassifier(data_path, model_path, stats_path)
-    # classifier.change_dropout_test()
+    classifier = ModulationClassifier(data_path, model_path, stats_path)
     classifier.main()
