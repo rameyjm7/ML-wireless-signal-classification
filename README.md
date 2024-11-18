@@ -78,15 +78,18 @@ This table summarizes statistics for all models found (slightly out of date and 
 
 
 Using RNN_LSTM_5_2_1.keras
+
 ![image](https://github.com/user-attachments/assets/59b7462e-42ae-4f17-8f06-74358c331487)
 ![image](https://github.com/user-attachments/assets/caeb8bc2-f3ac-41f8-8146-dc809dc646fe)
 ![image](https://github.com/user-attachments/assets/5b781cc7-047e-40af-aa47-fe0c8ee8fba6)
 
 Using Random Foresting and many features I was able to achieve 90% accuracy with minimal training (~15 seconds)
+
 ![image](https://github.com/user-attachments/assets/b2a0f6de-1090-42c5-800b-b56288c22324)
 ![image](https://github.com/user-attachments/assets/06309dc4-e6c4-4356-87d8-fead459fe1e0)
 
 The Feature importance is shown here
+
 ![image](https://github.com/user-attachments/assets/0cb5e8a3-e244-4918-9d82-caa986ecbe16)
 
 
