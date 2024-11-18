@@ -1,6 +1,7 @@
 # Purpose
 
-This is a repository to hold the code for our research paper: Wireless Signal Classification via Machine Learning.
+This is a repository to hold the code for our research paper: Wireless Signal Classification via Machine Learning. See our (in progress) paper here
+https://github.com/rameyjm7/ML-wireless-signal-classification/blob/main/Wireless%20Signal%20Classification%20via%20Machine%20Learning.pdf
 
 # Datasets
 
