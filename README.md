@@ -59,9 +59,14 @@ cuDNN 8.6
 CUDA 11.8
 
 
+# Top model
+
+Look in this notebook for the results of the top model using an RNN LSTM with 128 bit IQ and 128 bit SNR feature (1 bit extended to 128)
+https://github.com/rameyjm7/ML-wireless-signal-classification/blob/main/tests/rnn_lstm.ipynb
+
 # Model Statistics Summary
 
-This table summarizes statistics for all models found
+This table summarizes statistics for all models found:
 
 | Model Name                                          | Date Created        |   Epochs Trained |   Best Accuracy |   Current Accuracy | Last Trained        |
 |:----------------------------------------------------|:--------------------|-----------------:|----------------:|-------------------:|:--------------------|
