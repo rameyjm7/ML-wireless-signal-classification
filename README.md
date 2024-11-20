@@ -3,6 +3,8 @@
 This is a repository to hold the code for our research paper: Wireless Signal Classification via Machine Learning. See our (in progress) paper here
 https://github.com/rameyjm7/ML-wireless-signal-classification/blob/main/Wireless%20Signal%20Classification%20via%20Machine%20Learning.pdf
 
+We want to classify a signal as 1 of 11 modulation types using a machine learning model, such as RNN-LSTM or a Random Forest Classifier
+
 # Datasets
 
 Download the RADIOML 2016.10A dataset from this link https://www.deepsig.ai/datasets/
