@@ -4,8 +4,8 @@ CONTAINER_NAME = ${NAME}_container
 .PHONY: build start stop rebuild interactive super-clean logs train
 
 build:
-	#@echo "Creating a tarball for the source code..."
-	#@cd ..; mkdir -p /workspace/code; tar -czf code.tar.gz src/ tests/ setup.py RML2016.10a_dict.pkl; mv code.tar.gz docker/
+	@echo "Creating a tarball for the source code..."
+	@cd ..; mkdir -p /workspace/code; tar -czf code.tar.gz src/ tests/ setup.py RML2016.10a_dict.pkl; mv code.tar.gz docker/
 	@echo "Building Docker image: ${NAME}..."
 	docker build -t ${NAME} .
 
