@@ -97,9 +97,31 @@ This table summarizes statistics for all models found:
 
 Using RNN_LSTM_5_2_1.keras
 
-![image](https://github.com/user-attachments/assets/59b7462e-42ae-4f17-8f06-74358c331487)
-![image](https://github.com/user-attachments/assets/caeb8bc2-f3ac-41f8-8146-dc809dc646fe)
-![image](https://github.com/user-attachments/assets/5b781cc7-047e-40af-aa47-fe0c8ee8fba6)
+![image](https://github.com/user-attachments/assets/acfb0182-4c9f-4110-9f43-f935468e2748)
+![image](https://github.com/user-attachments/assets/33b350a3-694c-4a8a-a780-341679a35cfd)
+
+Classification Report for Modulation Types (SNR > 5 dB):
+              precision    recall  f1-score   support
+
+        8PSK       1.00      0.99      0.99      1420
+      AM-DSB       0.65      1.00      0.79      1425
+      AM-SSB       0.96      1.00      0.98      1398
+        BPSK       1.00      0.99      0.99      1402
+       CPFSK       1.00      1.00      1.00      1409
+        GFSK       1.00      1.00      1.00      1337
+        PAM4       0.99      0.99      0.99      1372
+       QAM16       0.95      0.97      0.96      1417
+       QAM64       0.97      0.93      0.95      1354
+        QPSK       0.99      0.99      0.99      1423
+        WBFM       1.00      0.44      0.61      1375
+
+    accuracy                           0.94     15332
+   macro avg       0.95      0.94      0.93     15332
+weighted avg       0.95      0.94      0.93     15332
+
+![image](https://github.com/user-attachments/assets/a8cab6f8-f43a-4115-9ef6-40db99f9be32)
+![image](https://github.com/user-attachments/assets/8cc08dcc-420f-47cc-aa01-055a3f3d63eb)
+
 
 Using Random Foresting and many features I was able to achieve 90% accuracy with minimal training (~15 seconds)
 
