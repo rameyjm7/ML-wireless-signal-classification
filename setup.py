@@ -12,6 +12,8 @@ setup(
         "scikit-learn",
         "tensorflow",
         "numpy",
+        "matplotlib",
+        "PyWavelets",
     ],
     entry_points={
         "console_scripts": [

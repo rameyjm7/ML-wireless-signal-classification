@@ -1,38 +1,30 @@
-# Use the official Python 3.8.10 runtime as a parent image
-FROM python:3.8.10-buster
+# Base image with CUDA and cuDNN
+FROM nvidia/cuda:11.8.0-cudnn8-devel-ubuntu22.04
 
-# Set the working directory in the container
-WORKDIR /usr/src/app
+# Set environment variables for Python and CUDA
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PATH="/usr/local/cuda/bin:$PATH"
+ENV LD_LIBRARY_PATH="/usr/local/cuda/lib64:$LD_LIBRARY_PATH"
 
-# Add GPG keys and install dependencies
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-    apt-transport-https \
-    ca-certificates \
-    curl \
-    gnupg2 \
-    unzip
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.10 python3.10-distutils python3-pip wget git unzip && \
+    rm -rf /var/lib/apt/lists/*
 
-# Add the Debian buster GPG key
-RUN curl -fsSL https://ftp-master.debian.org/keys/archive-key-10.asc | apt-key add - && \
-    curl -fsSL https://ftp-master.debian.org/keys/archive-key-10-security.asc | apt-key add - && \
-    apt-get update
+# Set Python3.10 as default
+RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.10 1 && \
+    update-alternatives --set python3 /usr/bin/python3.10
 
-# Upgrade pip to the latest version
-RUN pip install --upgrade pip
+# Install TensorFlow and other Python dependencies
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir tensorflow==2.12.0
 
-# Copy the code zip file into the container at /usr/src/app
-COPY code.zip .
+# Copy and install your application
+COPY code.tar.gz /workspace/code.tar.gz
+RUN mkdir -p /workspace/code && tar -xzf /workspace/code.tar.gz -C /workspace/code && \
+    pip install /workspace/code && \
+    mv /workspace/code/RML2016.10a_dict.pkl /workspace/code/src/ml_wireless_classification/
 
-# copy the data archive
-COPY RML2016.10a_dict.pkl .
-COPY requirements.txt .
 
-# Extract the zip file and clean up
-RUN unzip code.zip && rm code.zip
-
-# Install backend dependencies from Python
-RUN pip install -r requirements.txt
-
-# Start the application
-CMD ["bash", "-c", "cd RNN && python3 RNN_lstm.py"]
+# Verify CUDA and cuDNN
+RUN python3 -c "import tensorflow as tf; print('TensorFlow:', tf.__version__); print('GPUs:', tf.config.list_physical_devices('GPU'))"
