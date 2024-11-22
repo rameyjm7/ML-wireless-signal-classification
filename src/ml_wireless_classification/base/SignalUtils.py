@@ -9,6 +9,7 @@ import pickle
 from scipy.signal import hilbert, welch
 from scipy.ndimage import gaussian_filter1d
 import pywt
+from scipy.signal import find_peaks, peak_widths
 
 ALL_FEATURES = [
     # Instantaneous Frequency Features
@@ -120,24 +121,127 @@ ALL_FEATURES = [
     "Mid-Band Energy Concentration (Phase)"
 ]
 EXPERIMENTAL_FEATURES = [
-    "Frequency Domain Entropy with High-Frequency Emphasis",
-    "Frequency Domain Entropy with Mid-Frequency Emphasis",
-    "Frequency Domain Entropy with Low-Frequency Emphasis",
-    "Spectral Peak Count (Magnitude)",
-    "Spectral Peak Average Amplitude (Magnitude)",
-    "Spectral Peak Energy Ratio (Magnitude)",
-    "Spectral Peak Width (Magnitude)",
-    "Peak-to-Average Ratio (Spectral Peaks)",
-    "Spectral Kurtosis (Peaks Only)",
-    "Peak Frequency Variation (Magnitude)",
-    "Total Spectral Energy in Peaks (Magnitude)",
-    "Spectral Flatness in Peak Band (Magnitude)",
-    "Spectral Energy Spread in Peaks (Magnitude)",
-    "Maximum Peak Amplitude (Magnitude)",
-    "Minimum Peak Amplitude (Magnitude)",
-    "Spectral Peak Density (Peaks per Hz)",
-    "Frequency Range of Spectral Peaks"
+    # Frequency Domain Entropy Features by Order
+    "Frequency Domain Entropy with High-Frequency Emphasis (Order 1)", 
+    "Frequency Domain Entropy with High-Frequency Emphasis (Order 2)", 
+    "Frequency Domain Entropy with High-Frequency Emphasis (Order 3)", 
+    "Frequency Domain Entropy with High-Frequency Emphasis (Order 4)", 
+    
+    "Frequency Domain Entropy with Mid-Frequency Emphasis (Order 1)", 
+    "Frequency Domain Entropy with Mid-Frequency Emphasis (Order 2)", 
+    "Frequency Domain Entropy with Mid-Frequency Emphasis (Order 3)", 
+    "Frequency Domain Entropy with Mid-Frequency Emphasis (Order 4)", 
+    
+    "Frequency Domain Entropy with Low-Frequency Emphasis (Order 1)", 
+    "Frequency Domain Entropy with Low-Frequency Emphasis (Order 2)", 
+    "Frequency Domain Entropy with Low-Frequency Emphasis (Order 3)", 
+    "Frequency Domain Entropy with Low-Frequency Emphasis (Order 4)", 
+    
+    # Spectral Peak Characteristics by Order
+    "Spectral Peak Count (Magnitude) (Order 1)", 
+    "Spectral Peak Count (Magnitude) (Order 2)", 
+    "Spectral Peak Count (Magnitude) (Order 3)", 
+    "Spectral Peak Count (Magnitude) (Order 4)", 
+    
+    "Spectral Peak Average Amplitude (Magnitude) (Order 1)", 
+    "Spectral Peak Average Amplitude (Magnitude) (Order 2)", 
+    "Spectral Peak Average Amplitude (Magnitude) (Order 3)", 
+    "Spectral Peak Average Amplitude (Magnitude) (Order 4)", 
+    
+    "Spectral Peak Energy Ratio (Magnitude) (Order 1)", 
+    "Spectral Peak Energy Ratio (Magnitude) (Order 2)", 
+    "Spectral Peak Energy Ratio (Magnitude) (Order 3)", 
+    "Spectral Peak Energy Ratio (Magnitude) (Order 4)", 
+    
+    "Spectral Peak Width (Magnitude) (Order 1)", 
+    "Spectral Peak Width (Magnitude) (Order 2)", 
+    "Spectral Peak Width (Magnitude) (Order 3)", 
+    "Spectral Peak Width (Magnitude) (Order 4)", 
+    
+    "Peak-to-Average Ratio (Spectral Peaks) (Order 1)", 
+    "Peak-to-Average Ratio (Spectral Peaks) (Order 2)", 
+    "Peak-to-Average Ratio (Spectral Peaks) (Order 3)", 
+    "Peak-to-Average Ratio (Spectral Peaks) (Order 4)", 
+    
+    "Spectral Kurtosis (Peaks Only) (Order 1)", 
+    "Spectral Kurtosis (Peaks Only) (Order 2)", 
+    "Spectral Kurtosis (Peaks Only) (Order 3)", 
+    "Spectral Kurtosis (Peaks Only) (Order 4)", 
+    
+    "Peak Frequency Variation (Magnitude) (Order 1)", 
+    "Peak Frequency Variation (Magnitude) (Order 2)", 
+    "Peak Frequency Variation (Magnitude) (Order 3)", 
+    "Peak Frequency Variation (Magnitude) (Order 4)", 
+    
+    "Total Spectral Energy in Peaks (Magnitude) (Order 1)", 
+    "Total Spectral Energy in Peaks (Magnitude) (Order 2)", 
+    "Total Spectral Energy in Peaks (Magnitude) (Order 3)", 
+    "Total Spectral Energy in Peaks (Magnitude) (Order 4)", 
+    
+    "Spectral Flatness in Peak Band (Magnitude) (Order 1)", 
+    "Spectral Flatness in Peak Band (Magnitude) (Order 2)", 
+    "Spectral Flatness in Peak Band (Magnitude) (Order 3)", 
+    "Spectral Flatness in Peak Band (Magnitude) (Order 4)", 
+    
+    "Spectral Energy Spread in Peaks (Magnitude) (Order 1)", 
+    "Spectral Energy Spread in Peaks (Magnitude) (Order 2)", 
+    "Spectral Energy Spread in Peaks (Magnitude) (Order 3)", 
+    "Spectral Energy Spread in Peaks (Magnitude) (Order 4)", 
+    
+    "Maximum Peak Amplitude (Magnitude) (Order 1)", 
+    "Maximum Peak Amplitude (Magnitude) (Order 2)", 
+    "Maximum Peak Amplitude (Magnitude) (Order 3)", 
+    "Maximum Peak Amplitude (Magnitude) (Order 4)", 
+    
+    "Minimum Peak Amplitude (Magnitude) (Order 1)", 
+    "Minimum Peak Amplitude (Magnitude) (Order 2)", 
+    "Minimum Peak Amplitude (Magnitude) (Order 3)", 
+    "Minimum Peak Amplitude (Magnitude) (Order 4)", 
+    
+    "Spectral Peak Density (Peaks per Hz) (Order 1)", 
+    "Spectral Peak Density (Peaks per Hz) (Order 2)", 
+    "Spectral Peak Density (Peaks per Hz) (Order 3)", 
+    "Spectral Peak Density (Peaks per Hz) (Order 4)", 
+    
+    "Frequency Range of Spectral Peaks (Order 1)", 
+    "Frequency Range of Spectral Peaks (Order 2)", 
+    "Frequency Range of Spectral Peaks (Order 3)", 
+    "Frequency Range of Spectral Peaks (Order 4)",
+    
+    "Spectral Flatness (Order 1)",
+    "Spectral Flatness (Order 2)",
+    "Spectral Flatness (Order 3)",
+    "Spectral Flatness (Order 4)",
+    "Spectral Concentration (Order 1)",
+    "Spectral Concentration (Order 2)",
+    "Spectral Concentration (Order 3)",
+    "Spectral Concentration (Order 4)",
+    "Peak Symmetry (Order 1)",
+    "Peak Symmetry (Order 2)",
+    "Peak Symmetry (Order 3)",
+    "Peak Symmetry (Order 4)",
+    "Rolling Entropy (Order 1)",
+    "Rolling Entropy (Order 2)",
+    "Rolling Entropy (Order 3)",
+    "Rolling Entropy (Order 4)",
+    "Band-Specific Energy Spread High-Frequency (Order 1)",
+    "Band-Specific Energy Spread High-Frequency (Order 2)",
+    "Band-Specific Energy Spread High-Frequency (Order 3)",
+    "Band-Specific Energy Spread High-Frequency (Order 4)",
+    "Band-Specific Energy Spread Mid-Frequency (Order 1)",
+    "Band-Specific Energy Spread Mid-Frequency (Order 2)",
+    "Band-Specific Energy Spread Mid-Frequency (Order 3)",
+    "Band-Specific Energy Spread Mid-Frequency (Order 4)",
+    "Band-Specific Energy Spread Low-Frequency (Order 1)",
+    "Band-Specific Energy Spread Low-Frequency (Order 2)",
+    "Band-Specific Energy Spread Low-Frequency (Order 3)",
+    "Band-Specific Energy Spread Low-Frequency (Order 4)",
+    "Adaptive Peak Count (Order 1)",
+    "Adaptive Peak Count (Order 2)",
+    "Adaptive Peak Count (Order 3)",
+    "Adaptive Peak Count (Order 4)"
 ]
+
 
 
 feature_dict = {}
@@ -295,136 +399,261 @@ def extract_comprehensive_features(complex_signal, selected_features=None):
     add_feature_if_selected("Mid-Band Energy Concentration (Magnitude)", lambda x: np.abs(energy_concentration(x)), complex_signal)
     add_feature_if_selected("Mid-Band Energy Concentration (Phase)", lambda x: np.angle(energy_concentration(x)), complex_signal)
 
+    # Experimental WBFM Features with Orders 1 to 4
+    for order in range(1, 5):
+        add_feature_if_selected(f"Frequency Domain Entropy with High-Frequency Emphasis (Order {order})", 
+                                lambda x, order=order: frequency_domain_entropy(x, low_cut=0.5, high_cut=1.0, order=order), 
+                                complex_signal)
+        add_feature_if_selected(f"Frequency Domain Entropy with Mid-Frequency Emphasis (Order {order})", 
+                                lambda x, order=order: frequency_domain_entropy(x, low_cut=0.25, high_cut=0.5, order=order), 
+                                complex_signal)
+        add_feature_if_selected(f"Frequency Domain Entropy with Low-Frequency Emphasis (Order {order})", 
+                                lambda x, order=order: frequency_domain_entropy(x, low_cut=0.0, high_cut=0.25, order=order), 
+                                complex_signal)
+        add_feature_if_selected(f"Spectral Peak Count (Magnitude) (Order {order})", 
+                                lambda x, order=order: spectral_peak_count(x, order=order), 
+                                complex_signal)
+        add_feature_if_selected(f"Spectral Peak Average Amplitude (Magnitude) (Order {order})", 
+                                lambda x, order=order: spectral_peak_average_amplitude(x, order=order), 
+                                complex_signal)
+        add_feature_if_selected(f"Spectral Peak Energy Ratio (Magnitude) (Order {order})", 
+                                lambda x, order=order: spectral_peak_energy_ratio(x, order=order), 
+                                complex_signal)
+        add_feature_if_selected(f"Spectral Peak Width (Magnitude) (Order {order})", 
+                                lambda x, order=order: spectral_peak_width(x, order=order), 
+                                complex_signal)
+        add_feature_if_selected(f"Peak-to-Average Ratio (Spectral Peaks) (Order {order})", 
+                                lambda x, order=order: peak_to_average_ratio_spectral(x, order=order), 
+                                complex_signal)
+        add_feature_if_selected(f"Spectral Kurtosis (Peaks Only) (Order {order})", 
+                                lambda x, order=order: spectral_kurtosis_peaks(x, order=order), 
+                                complex_signal)
+        add_feature_if_selected(f"Peak Frequency Variation (Magnitude) (Order {order})", 
+                                lambda x, order=order: peak_frequency_variation(x, order=order), 
+                                complex_signal)
+        add_feature_if_selected(f"Total Spectral Energy in Peaks (Magnitude) (Order {order})", 
+                                lambda x, order=order: total_spectral_energy_peaks(x, order=order), 
+                                complex_signal)
+        add_feature_if_selected(f"Spectral Flatness in Peak Band (Magnitude) (Order {order})", 
+                                lambda x, order=order: spectral_flatness_peak_band(x, order=order), 
+                                complex_signal)
+        add_feature_if_selected(f"Spectral Energy Spread in Peaks (Magnitude) (Order {order})", 
+                                lambda x, order=order: spectral_energy_spread_peaks(x, order=order), 
+                                complex_signal)
+        add_feature_if_selected(f"Maximum Peak Amplitude (Magnitude) (Order {order})", 
+                                lambda x, order=order: max_peak_amplitude(x, order=order), 
+                                complex_signal)
+        add_feature_if_selected(f"Minimum Peak Amplitude (Magnitude) (Order {order})", 
+                                lambda x, order=order: min_peak_amplitude(x, order=order), 
+                                complex_signal)
+        add_feature_if_selected(f"Spectral Peak Density (Peaks per Hz) (Order {order})", 
+                                lambda x, order=order: spectral_peak_density(x, order=order), 
+                                complex_signal)
+        add_feature_if_selected(f"Frequency Range of Spectral Peaks (Order {order})", 
+                                lambda x, order=order: frequency_range_of_peaks(x, order=order), 
+                                complex_signal)
+        
 
-    # Experimental WBFM Features
-    add_feature_if_selected("Frequency Domain Entropy with High-Frequency Emphasis", lambda x: frequency_domain_entropy(x, low_cut=0.5, high_cut=1.0), complex_signal)
-    add_feature_if_selected("Frequency Domain Entropy with Mid-Frequency Emphasis", lambda x: frequency_domain_entropy(x, low_cut=0.25, high_cut=0.5), complex_signal)
-    add_feature_if_selected("Frequency Domain Entropy with Low-Frequency Emphasis", lambda x: frequency_domain_entropy(x, low_cut=0.0, high_cut=0.25), complex_signal)
-    add_feature_if_selected("Spectral Peak Count (Magnitude)", spectral_peak_count, complex_signal)
-    add_feature_if_selected("Spectral Peak Average Amplitude (Magnitude)", spectral_peak_average_amplitude, complex_signal)
-    add_feature_if_selected("Spectral Peak Energy Ratio (Magnitude)", spectral_peak_energy_ratio, complex_signal)
-    add_feature_if_selected("Spectral Peak Width (Magnitude)", spectral_peak_width, complex_signal)
-    add_feature_if_selected("Peak-to-Average Ratio (Spectral Peaks)", peak_to_average_ratio_spectral, complex_signal)
-    add_feature_if_selected("Spectral Kurtosis (Peaks Only)", spectral_kurtosis_peaks, complex_signal)
-    add_feature_if_selected("Peak Frequency Variation (Magnitude)", peak_frequency_variation, complex_signal)
-    add_feature_if_selected("Total Spectral Energy in Peaks (Magnitude)", total_spectral_energy_peaks, complex_signal)
-    add_feature_if_selected("Spectral Flatness in Peak Band (Magnitude)", spectral_flatness_peak_band, complex_signal)
-    add_feature_if_selected("Spectral Energy Spread in Peaks (Magnitude)", spectral_energy_spread_peaks, complex_signal)
-    add_feature_if_selected("Maximum Peak Amplitude (Magnitude)", max_peak_amplitude, complex_signal)
-    add_feature_if_selected("Minimum Peak Amplitude (Magnitude)", min_peak_amplitude, complex_signal)
-    add_feature_if_selected("Spectral Peak Density (Peaks per Hz)", spectral_peak_density, complex_signal)
-    add_feature_if_selected("Frequency Range of Spectral Peaks", frequency_range_of_peaks, complex_signal)
+    # Experimental WBFM Features with Order 1-4 (where applicable)
+    for order in range(1, 5):
+        add_feature_if_selected(f"Frequency Domain Entropy with High-Frequency Emphasis (Order {order})", 
+                                lambda x, order=order: frequency_domain_entropy(x, low_cut=0.5, high_cut=1.0, order=order), 
+                                complex_signal)
+        add_feature_if_selected(f"Frequency Domain Entropy with Mid-Frequency Emphasis (Order {order})", 
+                                lambda x, order=order: frequency_domain_entropy(x, low_cut=0.25, high_cut=0.5, order=order), 
+                                complex_signal)
+        add_feature_if_selected(f"Frequency Domain Entropy with Low-Frequency Emphasis (Order {order})", 
+                                lambda x, order=order: frequency_domain_entropy(x, low_cut=0.0, high_cut=0.25, order=order), 
+                                complex_signal)
+
+    # Features without an 'order' parameter
+    add_feature_if_selected(f"Spectral Peak Count (Magnitude) (Order {order})", 
+                            spectral_peak_count, 
+                            complex_signal)
+    add_feature_if_selected(f"Spectral Peak Average Amplitude (Magnitude) (Order {order})", 
+                            spectral_peak_average_amplitude, 
+                            complex_signal)
+    add_feature_if_selected(f"Spectral Peak Energy Ratio (Magnitude) (Order {order})", 
+                            spectral_peak_energy_ratio, 
+                            complex_signal)
+    add_feature_if_selected(f"Spectral Peak Width (Magnitude) (Order {order})", 
+                            spectral_peak_width, 
+                            complex_signal)
+    add_feature_if_selected(f"Peak-to-Average Ratio (Spectral Peaks) (Order {order})", 
+                            peak_to_average_ratio_spectral, 
+                            complex_signal)
+    add_feature_if_selected(f"Spectral Kurtosis (Peaks Only) (Order {order})", 
+                            spectral_kurtosis_peaks, 
+                            complex_signal)
+    add_feature_if_selected(f"Peak Frequency Variation (Magnitude) (Order {order})", 
+                            peak_frequency_variation, 
+                            complex_signal)
+    add_feature_if_selected(f"Total Spectral Energy in Peaks (Magnitude) (Order {order})", 
+                            total_spectral_energy_peaks, 
+                            complex_signal)
+    add_feature_if_selected(f"Spectral Flatness in Peak Band (Magnitude) (Order {order})", 
+                            spectral_flatness_peak_band, 
+                            complex_signal)
+    add_feature_if_selected(f"Spectral Energy Spread in Peaks (Magnitude) (Order {order})", 
+                            spectral_energy_spread_peaks, 
+                            complex_signal)
+    add_feature_if_selected(f"Maximum Peak Amplitude (Magnitude) (Order {order})", 
+                            max_peak_amplitude, 
+                            complex_signal)
+    add_feature_if_selected(f"Minimum Peak Amplitude (Magnitude) (Order {order})", 
+                            min_peak_amplitude, 
+                            complex_signal)
+    add_feature_if_selected(f"Spectral Peak Density (Peaks per Hz) (Order {order})", 
+                            spectral_peak_density, 
+                            complex_signal)
+    add_feature_if_selected(f"Frequency Range of Spectral Peaks (Order {order})", 
+                            frequency_range_of_peaks, 
+                            complex_signal)
+
+
 
     return feature_dict
 
+def peak_symmetry(signal):
+    # Calculate symmetry of spectral peaks based on central point
+    spectrum = np.abs(np.fft.fft(signal))
+    midpoint = len(spectrum) // 2
+    left_energy = np.sum(spectrum[:midpoint] ** 2)
+    right_energy = np.sum(spectrum[midpoint:] ** 2)
+    return np.abs(left_energy - right_energy) / (left_energy + right_energy + 1e-10)
 
+def rolling_entropy(signal, window_size=128):
+    # Compute entropy in rolling windows across the frequency spectrum
+    spectrum = np.abs(np.fft.fft(signal))
+    entropies = []
+    for i in range(0, len(spectrum) - window_size + 1, window_size // 2):
+        window = spectrum[i:i + window_size]
+        prob_dist = window / np.sum(window)
+        entropies.append(-np.sum(prob_dist * np.log2(prob_dist + 1e-10)))
+    return np.mean(entropies)
 
+def band_specific_energy_spread(signal, low_cut, high_cut):
+    # Calculate energy spread within a specific band
+    spectrum = np.abs(np.fft.fft(signal))
+    band_energy = np.sum(spectrum[int(low_cut * len(spectrum)):int(high_cut * len(spectrum))] ** 2)
+    total_energy = np.sum(spectrum ** 2)
+    return band_energy / (total_energy + 1e-10)
 
-# 1-3. Frequency Domain Entropy with High-Frequency, Mid-Frequency, and Low-Frequency Emphasis
-def frequency_domain_entropy(signal, fs=1.0, low_cut=0.0, high_cut=1.0):
-    freqs, power_spectrum = welch(signal, fs=fs)
-    band_mask = (freqs >= low_cut) & (freqs <= high_cut)
-    power_band = power_spectrum[band_mask] / np.sum(power_spectrum[band_mask] + 1e-10)
-    return entropy(power_band)
-
-# 4. Spectral Peak Count (Magnitude)
-def spectral_peak_count(signal):
-    magnitude_spectrum = np.abs(fft(signal))
-    peaks, _ = find_peaks(magnitude_spectrum)
+def adaptive_peak_count(signal):
+    # Dynamically count peaks based on adaptive thresholds
+    spectrum = np.abs(np.fft.fft(signal))
+    threshold = np.median(spectrum) * 1.5  # Example adaptive threshold
+    peaks, _ = find_peaks(spectrum, height=threshold)
     return len(peaks)
 
-# 5. Spectral Peak Average Amplitude (Magnitude)
-def spectral_peak_average_amplitude(signal):
-    magnitude_spectrum = np.abs(fft(signal))
-    peaks, _ = find_peaks(magnitude_spectrum)
-    return np.mean(magnitude_spectrum[peaks]) if peaks.size > 0 else 0
 
-# 6. Spectral Peak Energy Ratio (Magnitude)
-def spectral_peak_energy_ratio(signal):
-    magnitude_spectrum = np.abs(fft(signal))**2
-    peaks, _ = find_peaks(magnitude_spectrum)
-    peak_energy = np.sum(magnitude_spectrum[peaks])
-    total_energy = np.sum(magnitude_spectrum)
-    return peak_energy / (total_energy + 1e-10)
+# 4th Order Frequency Domain Entropy in Different Bands
+def frequency_domain_entropy(signal, low_cut=0.0, high_cut=1.0, order=4):
+    f, Pxx = welch(signal)
+    band_mask = (f >= low_cut) & (f <= high_cut)
+    Pxx_band = Pxx[band_mask] ** order  # 4th order power emphasis
+    Pxx_band /= np.sum(Pxx_band)  # Normalize
+    return -np.sum(Pxx_band * np.log2(Pxx_band + 1e-10))
 
-# 7. Spectral Peak Width (Magnitude)
-def spectral_peak_width(signal):
-    magnitude_spectrum = np.abs(fft(signal))
-    peaks, properties = find_peaks(magnitude_spectrum, width=5)
-    widths = properties['widths'] if 'widths' in properties else np.array([0])
-    return np.mean(widths) if widths.size > 0 else 0
+# 4th Order Spectral Peak Count
+def spectral_peak_count(signal, order=4):
+    spectrum = np.abs(fft(signal)) ** order
+    peaks, _ = find_peaks(spectrum)
+    return len(peaks)
 
-# 8. Peak-to-Average Ratio (Spectral Peaks)
-def peak_to_average_ratio_spectral(signal):
-    magnitude_spectrum = np.abs(fft(signal))
-    peaks, _ = find_peaks(magnitude_spectrum)
-    peak_amplitude = np.max(magnitude_spectrum[peaks]) if peaks.size > 0 else 0
-    average_amplitude = np.mean(magnitude_spectrum)
-    return peak_amplitude / (average_amplitude + 1e-10)
+# 4th Order Spectral Peak Average Amplitude
+def spectral_peak_average_amplitude(signal, order=4):
+    spectrum = np.abs(fft(signal)) ** order
+    peaks, _ = find_peaks(spectrum)
+    return np.mean(spectrum[peaks]) if len(peaks) > 0 else 0
 
-# 9. Spectral Kurtosis (Peaks Only)
-def spectral_kurtosis_peaks(signal):
-    magnitude_spectrum = np.abs(fft(signal))
-    peaks, _ = find_peaks(magnitude_spectrum)
-    return np.mean((magnitude_spectrum[peaks] - np.mean(magnitude_spectrum[peaks]))**4) / (np.std(magnitude_spectrum[peaks])**4 + 1e-10) if peaks.size > 0 else 0
+# 4th Order Spectral Peak Energy Ratio
+def spectral_peak_energy_ratio(signal, order=4):
+    spectrum = np.abs(fft(signal)) ** order
+    peaks, _ = find_peaks(spectrum)
+    peak_energy = np.sum(spectrum[peaks] ** 2)
+    total_energy = np.sum(spectrum ** 2)
+    return peak_energy / total_energy if total_energy > 0 else 0
 
-# 10. Peak Frequency Variation (Magnitude)
-def peak_frequency_variation(signal):
-    magnitude_spectrum = np.abs(fft(signal))
-    peaks, _ = find_peaks(magnitude_spectrum)
-    peak_freqs = np.diff(peaks)
-    return np.var(peak_freqs) if len(peak_freqs) > 1 else 0
+# 4th Order Spectral Peak Width
+def spectral_peak_width(signal, order=4):
+    spectrum = np.abs(fft(signal)) ** order
+    peaks, _ = find_peaks(spectrum)
+    widths = peak_widths(spectrum, peaks)[0]
+    return np.mean(widths) if len(widths) > 0 else 0
 
-# 11. Total Spectral Energy in Peaks (Magnitude)
-def total_spectral_energy_peaks(signal):
-    magnitude_spectrum = np.abs(fft(signal))**2
-    peaks, _ = find_peaks(magnitude_spectrum)
-    return np.sum(magnitude_spectrum[peaks]) if peaks.size > 0 else 0
+# 4th Order Peak-to-Average Ratio (Spectral Peaks)
+def peak_to_average_ratio_spectral(signal, order=4):
+    spectrum = np.abs(fft(signal)) ** order
+    peaks, _ = find_peaks(spectrum)
+    peak_avg = np.mean(spectrum[peaks]) if len(peaks) > 0 else 0
+    total_avg = np.mean(spectrum)
+    return peak_avg / total_avg if total_avg > 0 else 0
 
-# 12. Spectral Flatness in Peak Band (Magnitude)
-def spectral_flatness_peak_band(signal):
-    magnitude_spectrum = np.abs(fft(signal))
-    peaks, _ = find_peaks(magnitude_spectrum)
-    peak_band = magnitude_spectrum[peaks]
-    geometric_mean = np.exp(np.mean(np.log(peak_band + 1e-10)))  # Avoid log(0) by adding a small value
-    arithmetic_mean = np.mean(peak_band)
-    return geometric_mean / (arithmetic_mean + 1e-10) if peaks.size > 0 else 0
+# 4th Order Spectral Kurtosis (Peaks Only)
+def spectral_kurtosis_peaks(signal, order=4):
+    spectrum = np.abs(fft(signal)) ** order
+    peaks, _ = find_peaks(spectrum)
+    peak_values = spectrum[peaks]
+    return kurtosis(peak_values) if len(peak_values) > 0 else 0
 
-# 13. Spectral Energy Spread in Peaks (Magnitude)
-def spectral_energy_spread_peaks(signal):
-    magnitude_spectrum = np.abs(fft(signal))**2
-    peaks, _ = find_peaks(magnitude_spectrum)
-    peak_band_energy = magnitude_spectrum[peaks] if peaks.size > 0 else np.array([0])
-    return np.std(peak_band_energy)
+# 4th Order Peak Frequency Variation
+def peak_frequency_variation(signal, order=4):
+    spectrum = np.abs(fft(signal)) ** order
+    peaks, _ = find_peaks(spectrum)
+    if len(peaks) < 2:
+        return 0
+    return np.std(np.diff(peaks))
 
-# 14. Maximum Peak Amplitude (Magnitude)
-def max_peak_amplitude(signal):
-    magnitude_spectrum = np.abs(fft(signal))
-    peaks, _ = find_peaks(magnitude_spectrum)
-    return np.max(magnitude_spectrum[peaks]) if peaks.size > 0 else 0
+# 4th Order Total Spectral Energy in Peaks
+def total_spectral_energy_peaks(signal, order=4):
+    spectrum = np.abs(fft(signal)) ** order
+    peaks, _ = find_peaks(spectrum)
+    return np.sum(spectrum[peaks])
 
-# 15. Minimum Peak Amplitude (Magnitude)
-def min_peak_amplitude(signal):
-    magnitude_spectrum = np.abs(fft(signal))
-    peaks, _ = find_peaks(magnitude_spectrum)
-    return np.min(magnitude_spectrum[peaks]) if peaks.size > 0 else 0
+# 4th Order Spectral Flatness in Peak Band
+def spectral_flatness_peak_band(signal, order=4):
+    spectrum = np.abs(fft(signal)) ** order
+    peaks, _ = find_peaks(spectrum)
+    if len(peaks) == 0:
+        return 0
+    geometric_mean = np.exp(np.mean(np.log(spectrum[peaks] + 1e-10)))
+    arithmetic_mean = np.mean(spectrum[peaks])
+    return geometric_mean / (arithmetic_mean + 1e-10)
 
-# 16. Spectral Peak Density (Peaks per Hz)
-def spectral_peak_density(signal, fs=1.0):
-    magnitude_spectrum = np.abs(fft(signal))
-    peaks, _ = find_peaks(magnitude_spectrum)
-    return len(peaks) / fs if fs > 0 else 0
+# 4th Order Spectral Energy Spread in Peaks
+def spectral_energy_spread_peaks(signal, order=4):
+    spectrum = np.abs(fft(signal)) ** order
+    peaks, _ = find_peaks(spectrum)
+    peak_values = spectrum[peaks]
+    return np.std(peak_values) if len(peak_values) > 0 else 0
 
-# 17. Frequency Range of Spectral Peaks
-def frequency_range_of_peaks(signal, fs=1.0):
-    magnitude_spectrum = np.abs(fft(signal))
-    freqs = fftfreq(len(magnitude_spectrum), 1/fs)
-    peaks, _ = find_peaks(magnitude_spectrum)
-    if peaks.size > 0:
-        min_peak_freq = freqs[peaks].min()
-        max_peak_freq = freqs[peaks].max()
-        return max_peak_freq - min_peak_freq
-    return 0
+# 4th Order Maximum Peak Amplitude
+def max_peak_amplitude(signal, order=4):
+    spectrum = np.abs(fft(signal)) ** order
+    peaks, _ = find_peaks(spectrum)
+    return np.max(spectrum[peaks]) if len(peaks) > 0 else 0
+
+# 4th Order Minimum Peak Amplitude
+def min_peak_amplitude(signal, order=4):
+    spectrum = np.abs(fft(signal)) ** order
+    peaks, _ = find_peaks(spectrum)
+    return np.min(spectrum[peaks]) if len(peaks) > 0 else 0
+
+# 4th Order Spectral Peak Density
+def spectral_peak_density(signal, order=4):
+    spectrum = np.abs(fft(signal)) ** order
+    peaks, _ = find_peaks(spectrum)
+    return len(peaks) / len(spectrum)
+
+# 4th Order Frequency Range of Spectral Peaks
+def frequency_range_of_peaks(signal, order=4):
+    spectrum = np.abs(fft(signal)) ** order
+    peaks, _ = find_peaks(spectrum)
+    if len(peaks) < 2:
+        return 0
+    return peaks[-1] - peaks[0]
+
 
 
 def magnitude_phase_features(complex_signal, feature_func):

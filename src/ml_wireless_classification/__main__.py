@@ -1,26 +1,34 @@
 import faulthandler
-
-faulthandler.enable()
-
 import os
 import numpy as np
 from ml_wireless_classification.base.CommonVars import common_vars
 from ml_wireless_classification.rnn_lstm_w_SNR import ModulationLSTMClassifier
 
+# Enable fault handler for better debugging
+faulthandler.enable()
+
+def is_docker_environment():
+    """
+    Check if the script is running inside a Docker container by verifying the existence of /workspace/code.
+    """
+    return os.path.exists("/workspace/code")
+
 if __name__ == "__main__":
-    # set the model name
-    model_name = "rnn_lstm_w_SNR2"
-    # Get the directory of the current script
-    script_dir = os.path.dirname(os.path.abspath(__file__))
+    # Set the model name
+    model_name = "rnn_lstm_w_SNR_5_2_1"
 
-    data_path = os.path.join(
-        script_dir, "..", "..", "RML2016.10a_dict.pkl"
-    )  # One level up from the script's directory
+    # Determine base directory
+    if is_docker_environment():
+        base_dir = "/workspace/code/src/ml_wireless_classification"
+    else:
+        base_dir = os.path.dirname(os.path.abspath(__file__))
 
-    common_vars.stats_dir = os.path.join(script_dir, "stats")
-    common_vars.models_dir = os.path.join(script_dir, "models")
-    model_path = os.path.join(script_dir, "models", f"{model_name}.keras")
-    stats_path = os.path.join(script_dir, "stats", f"{model_name}_stats.json")
+    # Define paths
+    data_path = os.path.join(base_dir, "RML2016.10a_dict.pkl")
+    common_vars.stats_dir = os.path.join(base_dir, "stats")
+    common_vars.models_dir = os.path.join(base_dir, "models")
+    model_path = os.path.join(base_dir, "models", f"{model_name}.keras")
+    stats_path = os.path.join(base_dir, "stats", f"{model_name}_stats.json")
 
     # Usage Example
     print("Data path:", data_path)

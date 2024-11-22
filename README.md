@@ -15,8 +15,7 @@ Extract the dataset and it will be loaded on startup
 
 Its a python module with different machine learning models, statistics, and generic code for training and evaluation. 
 
-To install the module and run the code:
-
+# To install the module and run the code:
 
 // Install python3 virtual env
 
