@@ -1,0 +1,331 @@
+import os
+import ctypes
+import json
+from datetime import datetime
+import pickle
+import numpy as np
+import tensorflow as tf
+import gc
+from tensorflow.keras.optimizers import Adam, SGD
+from tensorflow.keras.models import Sequential, load_model, clone_model
+from tensorflow.keras.layers import LSTM, Dense, Dropout, Bidirectional
+from tensorflow.keras.layers import (
+    Conv2D,
+    MaxPooling2D,
+    Flatten,
+    Dense,
+    Dropout,
+    BatchNormalization,
+    Input,
+)
+from tensorflow.keras.models import Sequential
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import LabelEncoder
+from ml_wireless_classification.base.BaseModulationClassifier import (
+    BaseModulationClassifier,
+)
+
+from tensorflow.keras.callbacks import (
+    ReduceLROnPlateau,
+    EarlyStopping,
+    LearningRateScheduler,
+)
+from ml_wireless_classification.base.CustomEarlyStopping import CustomEarlyStopping
+
+from ml_wireless_classification.base.CommonVars import common_vars
+from ml_wireless_classification.base.SignalUtils import (
+    augment_data_progressive,
+    cyclical_lr,
+)
+
+from tensorflow.keras.layers import Add, Conv2D, Activation
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Input
+
+import os
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import LabelEncoder
+from tensorflow.keras.models import Sequential, load_model, Model
+from tensorflow.keras.layers import LSTM, Dropout, Dense, Input, Concatenate
+from tensorflow.keras.optimizers import Adam
+
+
+import os
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import LabelEncoder
+from tensorflow.keras.models import Model, load_model
+from tensorflow.keras.layers import LSTM, Dropout, Dense, Input, Concatenate
+from tensorflow.keras.optimizers import Adam
+
+
+from scipy.signal import hilbert
+from ml_wireless_classification.base.BaseModulationClassifier import BaseModulationClassifier
+from ml_wireless_classification.base.CustomEarlyStopping import CustomEarlyStopping
+
+class ModulationLSTMClassifier(BaseModulationClassifier):
+    def __init__(self, data_path, model_path="saved_model.h5", stats_path="model_stats.json"):
+        super().__init__(data_path, model_path, stats_path)
+        self.learning_rate = 0.0001
+        self.name = "rnn_lstm_w_SNR"
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        self.data_path = os.path.join(script_dir, "..", "..", "RML2016.10a_dict.pkl")
+        self.model_name = "rnn_lstm_w_SNR_5_2_1"
+        self.pretrained_model_path = os.path.join(script_dir, "models", f"{self.model_name}.keras")
+        self.ensemble_model_path = os.path.join(script_dir, "models", f"{self.model_name}_ensemble.keras")
+
+        if not os.path.exists(self.pretrained_model_path):
+            raise FileNotFoundError(f"Pre-trained model not found at {self.pretrained_model_path}")
+
+    def am_dsb_demod(self, iq_signal):
+        analytic_signal = hilbert(iq_signal)
+        amplitude_envelope = np.abs(analytic_signal)
+        return amplitude_envelope
+
+    def wbfm_demod(self, iq_signal, sample_rate=1.0):
+        phase = np.unwrap(np.angle(iq_signal[:, 0] + 1j * iq_signal[:, 1]))
+        demodulated = np.diff(phase) * (sample_rate / (2 * np.pi))
+        return np.pad(demodulated, (1, 0), mode="constant")
+    
+    def prepare_data(self):
+        X_existing, X_combined_branch, y = [], [], []
+
+        for (mod_type, snr), signals in self.data.items():
+            for signal in signals:
+                iq_signal = np.vstack([signal[0], signal[1]]).T  # Shape: (128, 2)
+                snr_signal = np.full((128, 1), snr)  # Shape: (128, 1)
+
+                # Add SNR to the first branch
+                combined_signal = np.hstack([iq_signal, snr_signal])  # Shape: (128, 3)
+
+                # Perform AM-DSB and WBFM demodulation
+                am_dsb_feature_i = self.am_dsb_demod(np.abs(signal[0]))  # Shape: (128,)
+                am_dsb_feature_q = self.am_dsb_demod(np.abs(signal[1]))  # Shape: (128,)
+                wbfm_feature = self.wbfm_demod(iq_signal)  # Shape: (128,)
+
+                # Expand dimensions for consistency
+                am_dsb_feature_i = np.expand_dims(am_dsb_feature_i, axis=-1)  # Shape: (128, 1)
+                am_dsb_feature_q = np.expand_dims(am_dsb_feature_q, axis=-1)  # Shape: (128, 1)
+                wbfm_feature = np.expand_dims(wbfm_feature, axis=-1)  # Shape: (128, 1)
+                
+                # print("am_dsb_feature_i shape:", am_dsb_feature_i.shape)
+                # print("am_dsb_feature_q shape:", am_dsb_feature_q.shape)
+                # print("wbfm_feature shape:", wbfm_feature.shape)
+
+                # Combine AM-DSB, WBFM, and SNR features for the second branch
+                combined_branch_features = np.hstack([am_dsb_feature_i, am_dsb_feature_q, wbfm_feature])  # Shape: (128, 3)
+                # print("Combined shape (expected):", combined_branch_features.shape)
+
+                # Collect data
+                X_existing.append(combined_signal)  # Shape: (128, 3)
+                X_combined_branch.append(combined_branch_features)  # Shape: (128, 3)
+                y.append(mod_type)
+
+        # Convert to numpy arrays
+        X_existing = np.array(X_existing)  # Shape: (num_samples, 128, 3)
+        X_combined_branch = np.array(X_combined_branch)  # Shape: (num_samples, 128, 3)
+        y = np.array(y)
+
+        # Encode labels
+        self.label_encoder = LabelEncoder()
+        y_encoded = self.label_encoder.fit_transform(y)
+
+        # Split into training and test sets
+        X_existing_train, X_existing_test, X_combined_train, X_combined_test, y_train, y_test = train_test_split(
+            X_existing, X_combined_branch, y_encoded, test_size=0.2, random_state=42
+        )
+
+        return (
+            (X_existing_train, X_combined_train, y_train),
+            (X_existing_test, X_combined_test, y_test),
+        )
+
+
+    def build_model(self, input_shape, num_classes):
+        # Load and freeze the pre-trained model
+        print(f"Loading pre-trained model from {self.pretrained_model_path}")
+        pretrained_model = load_model(self.pretrained_model_path)
+        pretrained_model.trainable = False
+
+        # First branch: Pre-trained model
+        existing_model_output = pretrained_model.output  # Shape: (batch_size, timesteps, features)
+        existing_input = pretrained_model.input
+
+        # Second branch: AM-DSB, WBFM, and SNR features
+        combined_branch_input = Input(shape=(128, 3), name="combined_branch_input")  # Shape: (batch_size, 128, 3)
+        lstm_features = Bidirectional(LSTM(128, return_sequences=False, name="lstm_combined_features"))(combined_branch_input)
+        dense_features = Dense(128, activation="relu", name="dense_combined_features")(lstm_features)
+
+        # Combine both branches
+        combined = Concatenate(name="combine_existing_new_features")([existing_model_output, dense_features])
+        x = Dense(128, activation="relu", name="dense_combined")(combined)
+        x = Dropout(0.1, name="dropout_combined")(x)
+        output = Dense(num_classes, activation="softmax", name="final_output")(x)
+
+        # Define the ensemble model
+        self.model = Model(inputs=[existing_input, combined_branch_input], outputs=output)
+
+        # Compile the model
+        optimizer = Adam(learning_rate=self.learning_rate)
+        self.model.compile(
+            loss="sparse_categorical_crossentropy",
+            optimizer=optimizer,
+            metrics=["accuracy"],
+        )
+
+    def save_model(self):
+        print(f"Saving ensemble model to {self.ensemble_model_path}")
+        self.model.save(self.ensemble_model_path)
+
+    def setup(self):
+        self.load_data()
+        train_data, test_data = self.prepare_data()
+        
+        # Unpack training and testing data
+        X_train, X_combined_train, y_train = train_data
+        X_test, X_combined_test, y_test = test_data
+
+        # Apply class weighting for imbalanced datasets
+        self.apply_class_weighting(y_train)
+
+        # Define the input shape based on the second branch's data (combined features)
+        input_shape = (X_combined_train.shape[1], X_combined_train.shape[2])  # Features per timestep
+        num_classes = len(np.unique(y_train))  # Number of unique classes in labels
+        self.build_model(input_shape, num_classes)
+
+        # Return the structured data for training and testing
+        return (X_train, X_combined_train, y_train), (X_test, X_combined_test, y_test)
+
+    def main(self, train=True, train_continuously = True):
+        train_data, test_data = self.setup()
+        X_train, X_combined_train, y_train = train_data
+        X_test, X_combined_test, y_test = test_data
+
+        if train_continuously:
+            self.train_continuously(
+                [X_train, X_combined_train],
+                y_train,
+                [X_test, X_combined_test],
+                y_test,
+                batch_size=64,
+                use_clr=True,
+                clr_step_size=10,
+            )
+        elif train:
+            self.train(
+                [X_train, X_combined_train],
+                y_train,
+                [X_test, X_combined_test],
+                y_test,
+                batch_size=64,
+                use_clr=True,
+                clr_step_size=10,
+            )
+            
+        self.evaluate([X_test, X_combined_test], y_test)
+        predictions = self.predict([X_test, X_combined_test])
+        print("Predicted Labels: ", predictions[:5])
+        print("True Labels: ", self.label_encoder.inverse_transform(y_test[:5]))
+        self.save_model()
+
+    def train_continuously(
+        self,
+        X_train,
+        y_train,
+        X_test,
+        y_test,
+        batch_size=64,
+        use_clr=False,
+        clr_step_size=10,
+    ):
+        try:
+            epoch = 1
+            while True:
+                print(f"\nStarting epoch {epoch}")
+                try:
+                    self.train(
+                        X_train,
+                        y_train,
+                        X_test,
+                        y_test,
+                        epochs=20,
+                        batch_size=batch_size,
+                        use_clr=use_clr,
+                        clr_step_size=clr_step_size,
+                    )
+                    epoch += 1
+
+                except Exception as e:
+                    print(e)
+                    # Run garbage collector
+                    gc.collect()
+                    tf.keras.backend.clear_session()
+                    pass
+
+        except KeyboardInterrupt:
+            print("\nTraining interrupted by user.")
+            self.evaluate(X_test, y_test)
+            self.save_stats()
+
+    def train(
+        self,
+        X_train,
+        y_train,
+        X_test,
+        y_test,
+        epochs=20,
+        batch_size=64,
+        use_clr=True,
+        clr_step_size=10,
+    ):
+        early_stopping_custom = CustomEarlyStopping(
+            monitor="val_accuracy",
+            min_delta=0.01,
+            patience=5,
+            restore_best_weights=True,
+        )
+        callbacks = [early_stopping_custom]
+
+        if use_clr:
+            clr_scheduler = LearningRateScheduler(
+                lambda epoch: self.cyclical_lr(epoch, step_size=clr_step_size)
+            )
+            callbacks.append(clr_scheduler)
+
+        history = self.model.fit(
+            [X_train[0], X_train[1]],  # First branch: pre-trained input, second branch: combined features
+            y_train,
+            epochs=epochs,
+            batch_size=batch_size,
+            validation_data=([X_test[0], X_test[1]], y_test),  # Validation inputs
+            callbacks=callbacks,
+            class_weight=self.class_weights_dict,
+        )
+
+        return history
+
+if __name__ == "__main__":
+    # set the model name
+    model_name = "rnn_lstm_w_SNR_ensemble"
+    # Get the directory of the current script
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+
+    data_path = os.path.join(
+        script_dir, "..", "..", "RML2016.10a_dict.pkl"
+    )  # One level up from the script's directory
+
+    common_vars.stats_dir = os.path.join(script_dir, "stats")
+    common_vars.models_dir = os.path.join(script_dir, " models")
+    model_path = os.path.join(script_dir, "models", f"{model_name}.keras")
+    stats_path = os.path.join(script_dir, "stats", f"{model_name}_stats.json")
+
+    # Usage Example
+    print("Data path:", data_path)
+    print("Model path:", model_path)
+    print("Stats path:", stats_path)
+
+    # Initialize the classifier
+    classifier = ModulationLSTMClassifier(data_path, model_path, stats_path)
+    classifier.main(train=True,
+                    train_continuously=False)
