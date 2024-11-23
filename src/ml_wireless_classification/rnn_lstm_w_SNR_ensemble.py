@@ -1,52 +1,36 @@
 import os
-import ctypes
 import json
-from datetime import datetime
 import pickle
 import numpy as np
 import tensorflow as tf
 import gc
-import numpy as np
-from scipy.fft import fft
-import seaborn as sns
-import matplotlib.pyplot as plt
-
+from datetime import datetime
 from scipy.stats import kurtosis, skew
+from scipy.ndimage import gaussian_filter1d
+from scipy.signal import hilbert
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
-from tensorflow.keras.models import Sequential, load_model, Model
-from tensorflow.keras.layers import LSTM, Dropout, Dense, Input, Concatenate
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+from tensorflow.keras.models import Model, load_model
 from tensorflow.keras.optimizers import Adam
-from scipy.signal import hilbert
-from scipy.ndimage import gaussian_filter1d
-from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
-
-from tensorflow.keras.optimizers import Adam, SGD
-from tensorflow.keras.models import Sequential, load_model, clone_model
-from tensorflow.keras.layers import LSTM, Dense, Dropout, Bidirectional
 from tensorflow.keras.layers import (
-    Conv2D,
-    MaxPooling2D,
-    Flatten,
+    LSTM,
     Dense,
     Dropout,
-    BatchNormalization,
     Input,
+    Concatenate,
+    Bidirectional,
+    Activation
 )
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import LabelEncoder
-from ml_wireless_classification.base.BaseModulationClassifier import (
-    BaseModulationClassifier,
-)
-from ml_wireless_classification.base.CustomEarlyStopping import CustomEarlyStopping
-
-from ml_wireless_classification.base.CommonVars import common_vars, RUN_MODE
-from ml_wireless_classification.base.TestingUtils import convert_and_clean_data
 from tensorflow.keras.callbacks import (
-    ReduceLROnPlateau,
-    EarlyStopping,
     LearningRateScheduler,
 )
+from ml_wireless_classification.base.BaseModulationClassifier import BaseModulationClassifier
+from ml_wireless_classification.base.CommonVars import common_vars, RUN_MODE
+from ml_wireless_classification.base.TestingUtils import convert_and_clean_data
+from scipy.fft import fft, fftfreq
+
+
 class ModulationLSTMClassifier(BaseModulationClassifier):
     def __init__(self, data_path, model_path="saved_model.h5", 
                  stats_path="model_stats.json",
@@ -122,6 +106,96 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
             (X_existing_train, X_combined_train, y_train),
             (X_existing_test, X_combined_test, y_test),
         )
+
+    # Spectral Density Features
+    
+    def psd(self, signal):
+        return np.abs(fft(signal)) ** 2
+    
+    def spectral_energy_density(self, signal):
+        psd = np.abs(fft(signal)) ** 2
+        return np.mean(psd)
+
+    def adaptive_gaussian_filtering(self,signal):
+        psd = np.abs(np.fft.fft(signal)) ** 2
+        sigma = max(0.1, min(2, np.std(psd) / np.mean(psd)))
+        filtered_psd = gaussian_filter1d(psd, sigma=sigma)
+        return np.sum(filtered_psd)
+    
+    def rms_signal_envelope(self, signal):
+        envelope = np.abs(hilbert(signal))
+        return np.sqrt(np.mean(envelope**2))
+    
+    def psd_kurtosis(self, signal):
+        return kurtosis(np.abs(fft(signal)) ** 2)
+
+    def prepare_data_alt(self):
+        X_existing, X_combined_branch, y = [], [], []
+
+        for (mod_type, snr), signals in self.data.items():
+            for signal in signals:
+                iq_signal = np.vstack([signal[0], signal[1]]).T  # Shape: (128, 2)
+                snr_signal = np.full((128, 1), snr)  # Shape: (128, 1)
+
+                # Add SNR to the first branch
+                combined_signal = np.hstack([iq_signal, snr_signal])  # Shape: (128, 3)
+
+                # Perform AM-DSB and WBFM demodulation
+                feature_0 = np.full((128, 1), self.adaptive_gaussian_filtering(signal))  # Shape: (128,)
+                feature_1 = np.full((128, 1), self.rms_signal_envelope(signal))  # Shape: (128,)
+                feature_2 = self.psd_kurtosis(signal)  # Shape: (128,)
+
+                # Expand dimensions for consistency
+                # feature_0 = np.expand_dims(
+                #     feature_0, axis=-1
+                # )  # Shape: (128, 1)
+                # feature_1 = np.expand_dims(
+                #     feature_1, axis=-1
+                # )  # Shape: (128, 1)
+                feature_2 = np.expand_dims(feature_2, axis=-1)  # Shape: (128, 1)
+  
+                # print("feature_0 shape:", feature_0.shape)
+                # print("feature_1 shape:", feature_1.shape)
+                # print("feature_2 shape:", feature_2.shape)
+
+                # Combine AM-DSB, WBFM, and SNR features for the second branch
+                combined_branch_features = np.hstack(
+                    [feature_0, feature_1, feature_2]
+                )  # Shape: (128, 3)
+                # print("Combined shape (expected):", combined_branch_features.shape)
+
+                # Collect data
+                X_existing.append(combined_signal)  # Shape: (128, 3)
+                X_combined_branch.append(combined_branch_features)  # Shape: (128, 3)
+                y.append(mod_type)
+
+        # Convert to numpy arrays
+        X_existing = convert_and_clean_data(np.array(X_existing))  # Shape: (num_samples, 128, 3)
+        X_combined_branch = convert_and_clean_data(np.array(X_combined_branch))  # Shape: (num_samples, 128, 3)
+
+        y = np.array(y)
+
+        # Encode labels
+        self.label_encoder = LabelEncoder()
+        y_encoded = self.label_encoder.fit_transform(y)
+
+        # Split into training and test sets
+        (
+            X_existing_train,
+            X_existing_test,
+            X_combined_train,
+            X_combined_test,
+            y_train,
+            y_test,
+        ) = train_test_split(
+            X_existing, X_combined_branch, y_encoded, test_size=0.2, random_state=42
+        )
+
+        return (
+            (X_existing_train, X_combined_train, y_train),
+            (X_existing_test, X_combined_test, y_test),
+        )
+
 
     def evaluate(self, X_test, y_test):
         # Unpack the inputs for the two branches
