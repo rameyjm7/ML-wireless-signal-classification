@@ -7,8 +7,13 @@ This repository contains the Docker setup and code for training and evaluating m
 Ensure the following dependencies are installed on your system:
 1. **NVIDIA Container Toolkit**: [Install Guide](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html)
 2. **Docker CE**: [Docker Installation](https://docs.docker.com/get-docker/)
-3. **Make**: Install with `sudo apt-get install -y build-essential`
-4. **NVIDIA Drivers**: Ensure drivers compatible with CUDA 11.8 are installed.
+
+   This guide works on ubuntu 22.04 
+
+   https://www.digitalocean.com/community/tutorials/how-to-install-and-use-docker-on-ubuntu-22-04
+
+4. **Make**: Install with `sudo apt-get install -y build-essential`
+5. **NVIDIA Drivers**: Ensure drivers compatible with CUDA 11.8 are installed.
 
 ## Makefile Commands
 
