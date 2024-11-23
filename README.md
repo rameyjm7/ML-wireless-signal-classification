@@ -98,6 +98,25 @@ This table summarizes statistics for all models found:
 Using RNN_LSTM_5_2_1.keras
 
 ![image](https://github.com/user-attachments/assets/acfb0182-4c9f-4110-9f43-f935468e2748)
+Classification Report for Modulation Types:
+              precision    recall  f1-score   support
+
+        8PSK       0.77      0.60      0.68      3990
+      AM-DSB       0.50      0.77      0.61      4086
+      AM-SSB       0.51      0.80      0.62      4005
+        BPSK       0.84      0.66      0.74      4018
+       CPFSK       0.83      0.64      0.72      3995
+        GFSK       0.77      0.68      0.73      3967
+        PAM4       0.79      0.77      0.78      4004
+       QAM16       0.77      0.75      0.76      3921
+       QAM64       0.69      0.86      0.77      3955
+        QPSK       0.74      0.60      0.66      4088
+        WBFM       0.47      0.32      0.38      3971
+
+    accuracy                           0.68     44000
+   macro avg       0.70      0.68      0.68     44000
+weighted avg       0.70      0.68      0.68     44000
+
 ![image](https://github.com/user-attachments/assets/33b350a3-694c-4a8a-a780-341679a35cfd)
 
 Classification Report for Modulation Types (SNR > 5 dB):
