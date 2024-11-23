@@ -6,6 +6,16 @@ import pickle
 import numpy as np
 import tensorflow as tf
 import gc
+import numpy as np
+from scipy.fft import fft
+from scipy.stats import kurtosis, skew
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import LabelEncoder
+from tensorflow.keras.models import Sequential, load_model, Model
+from tensorflow.keras.layers import LSTM, Dropout, Dense, Input, Concatenate
+from tensorflow.keras.optimizers import Adam
+from scipy.signal import hilbert
+from scipy.ndimage import gaussian_filter1d
 from tensorflow.keras.optimizers import Adam, SGD
 from tensorflow.keras.models import Sequential, load_model, clone_model
 from tensorflow.keras.layers import LSTM, Dense, Dropout, Bidirectional
@@ -18,52 +28,20 @@ from tensorflow.keras.layers import (
     BatchNormalization,
     Input,
 )
-from tensorflow.keras.models import Sequential
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 from ml_wireless_classification.base.BaseModulationClassifier import (
     BaseModulationClassifier,
 )
+from ml_wireless_classification.base.CustomEarlyStopping import CustomEarlyStopping
 
+from ml_wireless_classification.base.CommonVars import common_vars
+from ml_wireless_classification.base.TestingUtils import convert_and_clean_data
 from tensorflow.keras.callbacks import (
     ReduceLROnPlateau,
     EarlyStopping,
     LearningRateScheduler,
 )
-from ml_wireless_classification.base.CustomEarlyStopping import CustomEarlyStopping
-
-from ml_wireless_classification.base.CommonVars import common_vars
-from ml_wireless_classification.base.SignalUtils import (
-    augment_data_progressive,
-    cyclical_lr,
-)
-
-from tensorflow.keras.layers import Add, Conv2D, Activation
-from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Input
-
-import os
-import numpy as np
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import LabelEncoder
-from tensorflow.keras.models import Sequential, load_model, Model
-from tensorflow.keras.layers import LSTM, Dropout, Dense, Input, Concatenate
-from tensorflow.keras.optimizers import Adam
-
-
-import os
-import numpy as np
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import LabelEncoder
-from tensorflow.keras.models import Model, load_model
-from tensorflow.keras.layers import LSTM, Dropout, Dense, Input, Concatenate
-from tensorflow.keras.optimizers import Adam
-
-
-from scipy.signal import hilbert
-from ml_wireless_classification.base.BaseModulationClassifier import BaseModulationClassifier
-from ml_wireless_classification.base.CustomEarlyStopping import CustomEarlyStopping
-
 class ModulationLSTMClassifier(BaseModulationClassifier):
     def __init__(self, data_path, model_path="saved_model.h5", stats_path="model_stats.json"):
         super().__init__(data_path, model_path, stats_path)
@@ -201,6 +179,7 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
         train_data, test_data = self.setup()
         X_train, X_combined_train, y_train = train_data
         X_test, X_combined_test, y_test = test_data
+        
 
         if train_continuously:
             self.train_continuously(
@@ -279,13 +258,14 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
         use_clr=True,
         clr_step_size=10,
     ):
-        early_stopping_custom = CustomEarlyStopping(
-            monitor="val_accuracy",
-            min_delta=0.01,
-            patience=5,
-            restore_best_weights=True,
-        )
-        callbacks = [early_stopping_custom]
+        # early_stopping_custom = CustomEarlyStopping(
+        #     monitor="val_accuracy",
+        #     min_delta=0.001,
+        #     patience=5,
+        #     restore_best_weights=True,
+        # )
+        # callbacks = [early_stopping_custom]
+        callbacks = []
 
         if use_clr:
             clr_scheduler = LearningRateScheduler(
@@ -302,6 +282,10 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
             callbacks=callbacks,
             class_weight=self.class_weights_dict,
         )
+        
+        self.update_epoch_stats(epochs)
+        current_accuracy = max(history.history["val_accuracy"])
+        self.update_and_save_stats(current_accuracy)
 
         return history
 
@@ -322,10 +306,10 @@ if __name__ == "__main__":
 
     # Usage Example
     print("Data path:", data_path)
-    print("Model path:", model_path)
+    print("Model path:", model_path) 
     print("Stats path:", stats_path)
 
     # Initialize the classifier
     classifier = ModulationLSTMClassifier(data_path, model_path, stats_path)
     classifier.main(train=True,
-                    train_continuously=False)
+                    train_continuously=True)
