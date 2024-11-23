@@ -14,6 +14,8 @@ Ensure the following dependencies are installed on your system:
 
 4. **Make**: Install with `sudo apt-get install -y build-essential`
 5. **NVIDIA Drivers**: Ensure drivers compatible with CUDA 11.8 are installed.
+   
+   Try running nvidia-smi and look for an output where it lists the CUDA version and GPUs present
 
 ## Makefile Commands
 
