@@ -1,7 +1,7 @@
 {
     "date_created": "2024-11-23 14:12:01",
     "epochs_trained": 0,
-    "best_accuracy": 0,
+    "best_accuracy": 0.9288407163053722,
     "current_accuracy": 0,
     "last_trained": null,
     "overall_accuracy": 65.88863636363637,
@@ -28,6 +28,5 @@
         "16.0": 90.91322126306225,
         "18.0": 91.9172932330827
     },
-    "peak_accuracy": 92.88407163053722,
     "peak_snr": 6.0
 }

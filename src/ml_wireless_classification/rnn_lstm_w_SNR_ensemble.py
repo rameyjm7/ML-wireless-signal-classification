@@ -516,10 +516,9 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
             "overall_accuracy": overall_accuracy,
             "accuracy_over_5dB": accuracy_over_5dB,
             "accuracy_per_snr": dict(zip(unique_snrs, accuracy_per_snr)),
-            "peak_accuracy": peak_accuracy,
+            "best_accuracy": peak_accuracy/100, # scale to 0-1.0
             "peak_snr": peak_snr,
         }
-
         
 
 if __name__ == "__main__":
