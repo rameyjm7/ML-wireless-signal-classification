@@ -8,6 +8,9 @@ import tensorflow as tf
 import gc
 import numpy as np
 from scipy.fft import fft
+import seaborn as sns
+import matplotlib.pyplot as plt
+
 from scipy.stats import kurtosis, skew
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
@@ -16,6 +19,8 @@ from tensorflow.keras.layers import LSTM, Dropout, Dense, Input, Concatenate
 from tensorflow.keras.optimizers import Adam
 from scipy.signal import hilbert
 from scipy.ndimage import gaussian_filter1d
+from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
+
 from tensorflow.keras.optimizers import Adam, SGD
 from tensorflow.keras.models import Sequential, load_model, clone_model
 from tensorflow.keras.layers import LSTM, Dense, Dropout, Bidirectional
@@ -288,6 +293,127 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
         self.update_and_save_stats(current_accuracy)
 
         return history
+    
+    
+    def plot_all_analysis(self, X_test, X_combined_test, y_test, label_encoder, model_name, show_plot = False):
+        """
+        Combines all analysis and visualization into a single function.
+        Organizes the plots in a single figure with a dynamic grid layout.
+        Saves the figure to the specified directory with the model name as the file name.
+        """
+        
+        # Get the directory of the current script
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        common_vars.stats_dir = os.path.join(script_dir, "stats")
+        
+        model = self.model
+        # --- Confusion Matrix for All SNR Levels ---
+        y_pred = np.argmax(model.predict([X_test, X_combined_test], verbose=False), axis=1)
+        conf_matrix = confusion_matrix(y_test, y_pred)
+
+        # --- Confusion Matrix for SNR > 5 dB ---
+        snr_above_5_indices = np.where(X_test[:, :, 2].mean(axis=1) > 5)
+        X_test_snr_above_5 = X_test[snr_above_5_indices]
+        X_combined_test_snr_above_5 = X_combined_test[snr_above_5_indices]
+        y_test_snr_above_5 = y_test[snr_above_5_indices]
+        
+        if len(X_test_snr_above_5) > 0:
+            y_pred_snr_above_5 = np.argmax(
+                model.predict([X_test_snr_above_5, X_combined_test_snr_above_5], verbose=False), axis=1
+            )
+            conf_matrix_snr_above_5 = confusion_matrix(y_test_snr_above_5, y_pred_snr_above_5)
+        else:
+            conf_matrix_snr_above_5 = None
+
+        # --- Accuracy vs. SNR ---
+        unique_snrs = sorted(set(X_test[:, :, 2].mean(axis=1)))
+        accuracy_per_snr = []
+        for snr in unique_snrs:
+            snr_indices = np.where(X_test[:, :, 2].mean(axis=1) == snr)
+            X_snr = X_test[snr_indices]
+            X_combined_snr = X_combined_test[snr_indices]
+            y_snr = y_test[snr_indices]
+            if len(y_snr) > 0:
+                y_pred_snr = np.argmax(model.predict([X_snr, X_combined_snr], verbose=0), axis=1)
+                accuracy_per_snr.append(accuracy_score(y_snr, y_pred_snr) * 100)
+            else:
+                accuracy_per_snr.append(np.nan)
+
+        peak_accuracy = max([acc for acc in accuracy_per_snr if not np.isnan(acc)])
+        peak_snr = unique_snrs[accuracy_per_snr.index(peak_accuracy)]
+
+        # --- Accuracy vs. SNR per Modulation Type ---
+        unique_modulations = label_encoder.classes_
+        modulation_traces = []
+        for mod_index, mod in enumerate(unique_modulations):
+            accuracies = []
+            for snr in unique_snrs:
+                mod_snr_indices = np.where(
+                    (y_test == mod_index) & (X_test[:, :, 2].mean(axis=1) == snr)
+                )
+                X_mod_snr = X_test[mod_snr_indices]
+                X_combined_mod_snr = X_combined_test[mod_snr_indices]
+                y_mod_snr = y_test[mod_snr_indices]
+                if len(y_mod_snr) > 0:
+                    y_pred_mod_snr = np.argmax(model.predict([X_mod_snr, X_combined_mod_snr], verbose=False), axis=1)
+                    accuracies.append(accuracy_score(y_mod_snr, y_pred_mod_snr) * 100)
+                else:
+                    accuracies.append(np.nan)
+            modulation_traces.append((mod, accuracies))
+
+        # --- Create Subplots ---
+        fig, axes = plt.subplots(2, 2, figsize=(16, 12))
+        
+        # Plot Confusion Matrix for All SNR Levels
+        sns.heatmap(conf_matrix, annot=True, fmt="d", cmap="Blues", 
+                    xticklabels=label_encoder.classes_, yticklabels=label_encoder.classes_, ax=axes[0, 0])
+        axes[0, 0].set_title("Confusion Matrix (All SNR Levels)")
+        axes[0, 0].set_xlabel("Predicted Label")
+        axes[0, 0].set_ylabel("True Label")
+
+        # Plot Confusion Matrix for SNR > 5 dB
+        if conf_matrix_snr_above_5 is not None:
+            sns.heatmap(conf_matrix_snr_above_5, annot=True, fmt="d", cmap="Blues", 
+                        xticklabels=label_encoder.classes_, yticklabels=label_encoder.classes_, ax=axes[0, 1])
+            axes[0, 1].set_title("Confusion Matrix (SNR > 5 dB)")
+            axes[0, 1].set_xlabel("Predicted Label")
+            axes[0, 1].set_ylabel("True Label")
+        else:
+            axes[0, 1].text(0.5, 0.5, "No Samples with SNR > 5 dB", 
+                            ha='center', va='center', fontsize=12)
+            axes[0, 1].set_title("Confusion Matrix (SNR > 5 dB)")
+
+        # Plot Accuracy vs. SNR
+        axes[1, 0].plot(unique_snrs, accuracy_per_snr, 'b-o', label='Recognition Accuracy')
+        axes[1, 0].plot(peak_snr, peak_accuracy, 'ro')  # Mark peak accuracy
+        axes[1, 0].text(peak_snr, peak_accuracy + 1, f"{peak_accuracy:.2f}%", 
+                        ha='center', va='bottom', fontsize=10, 
+                        bbox=dict(facecolor='white', edgecolor='black', boxstyle='round,pad=0.3'))
+        axes[1, 0].set_title("Recognition Accuracy vs. SNR")
+        axes[1, 0].set_xlabel("SNR (dB)")
+        axes[1, 0].set_ylabel("Accuracy (%)")
+        axes[1, 0].grid(True)
+
+        # Plot Accuracy vs. SNR per Modulation Type
+        for mod, accuracies in modulation_traces:
+            axes[1, 1].plot(unique_snrs, accuracies, '-o', label=mod)
+        axes[1, 1].set_title("Accuracy vs. SNR per Modulation Type")
+        axes[1, 1].set_xlabel("SNR (dB)")
+        axes[1, 1].set_ylabel("Accuracy (%)")
+        axes[1, 1].legend(loc='upper left', fontsize=8)
+        axes[1, 1].grid(True)
+
+        # Adjust layout
+        plt.tight_layout()
+
+        # Save the figure
+        output_file = os.path.join(common_vars.stats_dir, f"{model_name}_analysis.png")
+        plt.savefig(output_file, dpi=300)
+        print(f"Figure saved to {output_file}")
+
+        if show_plot: 
+            plt.show()
+        
 
 if __name__ == "__main__":
     # set the model name
