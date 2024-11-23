@@ -5,6 +5,12 @@ import numpy as np
 from scipy.signal import convolve
 from scipy.ndimage import gaussian_filter1d
 
+# AdaptiveNoiseReduction module
+# based on this paper
+# An efficient Automatic Modulation Classification method based on the
+# Convolution Adaptive Noise Reduction network✩
+# Haihai Bai, Ming Huang∗, Jingjing Yang
+
 class SqueezeExcitation(nn.Module):
     """Squeeze-and-Excitation block for adaptive weighting of channels."""
     def __init__(self, in_channels, reduction=4):

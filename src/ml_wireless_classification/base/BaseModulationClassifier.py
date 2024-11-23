@@ -15,7 +15,7 @@ from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.models import Sequential, load_model, clone_model
 from tensorflow.keras.layers import LSTM, Dense, Dropout
 from tensorflow.keras.utils import plot_model
-from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay, classification_report
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay, classification_report, accuracy_score
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import train_test_split
@@ -25,10 +25,11 @@ from tensorflow.keras.callbacks import (
     LearningRateScheduler,
 )
 from tensorflow.keras.callbacks import TensorBoard
+import seaborn as sns
 
 from scipy.signal import hilbert
 from ml_wireless_classification.base.SignalUtils import cyclical_lr
-from ml_wireless_classification.base.CommonVars import common_vars
+from ml_wireless_classification.base.CommonVars import common_vars, RUN_MODE
 from ml_wireless_classification.base.CustomEarlyStopping import CustomEarlyStopping
 
 
@@ -276,20 +277,38 @@ class BaseModulationClassifier(ABC):
         self.stats["epochs_trained"] += epochs
         self.stats["last_trained"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    def update_and_save_stats(self, current_accuracy):
-        """Updates stats with the current accuracy and saves the model if accuracy improves."""
-        self.stats["current_accuracy"] = current_accuracy
+    def update_and_save_stats(self, new_stats: dict):
+        """
+        Updates stats with the provided new data and saves the model if accuracy improves.
 
-        if current_accuracy > self.stats["best_accuracy"]:
-            print(f"New best accuracy: {current_accuracy}. Saving model...")
+        Parameters:
+        - new_stats (dict): A dictionary containing the new statistics to be updated.
+
+        Expected keys in new_stats:
+        - "current_accuracy" (float): The latest accuracy.
+        - "best_accuracy" (float, optional): The best accuracy recorded so far.
+        """
+
+        # Update the stats dictionary with new data
+        for key, value in new_stats.items():
+            self.stats[key] = value
+
+        current_accuracy = self.stats.get("current_accuracy", 0)
+        best_accuracy = self.stats.get("best_accuracy", 0)
+
+        # Check if the current accuracy is better than the best accuracy
+        if current_accuracy > best_accuracy:
+            print(f"New best accuracy: {current_accuracy:.2f}. Saving model...")
             self.stats["best_accuracy"] = current_accuracy
             self.save_model()
         else:
             print(
-                f"Current accuracy {current_accuracy} did not improve from best accuracy {self.stats['best_accuracy']}. Skipping model save."
+                f"Current accuracy {current_accuracy:.2f} did not improve from best accuracy {best_accuracy:.2f}. Skipping model save."
             )
 
+        # Save the updated stats
         self.save_stats()
+    
 
     def apply_class_weighting(self, y_train):
         # Calculate class weights
@@ -387,11 +406,11 @@ class BaseModulationClassifier(ABC):
 
         return feature_accuracies, least_useful_feature
 
-    def main(self, train=True):
+    def main(self, mode : RUN_MODE):
         X_train, y_train, X_test, y_test = self.setup()
 
         # allow to skip training if we only want to evaluate
-        if train:
+        if mode == RUN_MODE.TRAIN_CONTINUOUSLY:
             # Train continuously with cyclical learning rates
             self.train_continuously(
                 X_train,
@@ -402,7 +421,20 @@ class BaseModulationClassifier(ABC):
                 use_clr=True,
                 clr_step_size=10,
             )
-
+        elif mode == RUN_MODE.TRAIN:
+            # Train continuously with cyclical learning rates
+            self.train(
+                X_train,
+                y_train,
+                X_test,
+                y_test,
+                batch_size=64,
+                use_clr=True,
+                clr_step_size=10,
+            )
+        elif mode == RUN_MODE.EVALUATE_ONLY:
+            print("Evaluating only...")
+                 
         # Evaluate the model
         self.evaluate(X_test, y_test)
 
@@ -410,6 +442,10 @@ class BaseModulationClassifier(ABC):
         predictions = self.predict(X_test)
         print("Predicted Labels: ", predictions[:5])
         print("True Labels: ", self.label_encoder.inverse_transform(y_test[:5]))
+        
+        stats_dict = self.plot_all_analysis(X_test, y_test, self.label_encoder, False)
+        self.update_and_save_stats(stats_dict)
+
 
     def augment_wbfm_samples(self, X, y, target_class, augmentation_factor=2):
         # Duplicate WBFM samples and add minor variations
@@ -452,31 +488,129 @@ class BaseModulationClassifier(ABC):
         # Evaluate the model performance
         self.evaluate(X_test, y_test)
 
-    def save_model_to_json(self):
-        # Generate the filename using the model name
-        model_name = self.get_model_name()
-        filename = os.path.join(common_vars.models_dir,f"{model_name}_layers.json")
-        
-        # Prepare to store layers info
-        model_info = []
+    def plot_all_analysis(self, X_test, y_test, label_encoder, show_plot=False):
+        """
+        Combines all analysis and visualization into a single function for a single-branch model.
+        Organizes the plots in a single figure with a dynamic grid layout.
+        Saves the figure to the specified directory with the model name as the file name.
+        Returns a dictionary of statistics such as accuracy over 5 dB and accuracy per SNR.
+        """
+        # Get the directory of the current script
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        common_vars.stats_dir = os.path.join(script_dir, "..", "stats")
 
-        # Loop through each layer in the model
-        for layer in self.model.layers:
-            layer_info = {
-                "type": layer.__class__.__name__,  # Layer type (e.g., "Dense", "LSTM")
-                "config": layer.get_config(),      # Layer configuration (e.g., units, activation)
-            }
-            
-            # Get weights and biases, if available, and convert them to lists
-            weights = layer.get_weights()
-            if weights:
-                layer_info["weights"] = [w.tolist() for w in weights]
-            
-            # Append the layer information to the model info list
-            model_info.append(layer_info)
+        model = self.model
 
-        # Save to a JSON file
-        with open(filename, "w") as json_file:
-            json.dump(model_info, json_file, indent=4)
-        
-        print(f"Model layers and weights saved to {filename}")
+        # --- Confusion Matrix for All SNR Levels ---
+        y_pred = np.argmax(model.predict(X_test, verbose=False), axis=1)
+        conf_matrix = confusion_matrix(y_test, y_pred)
+        overall_accuracy = accuracy_score(y_test, y_pred) * 100
+
+        # --- Confusion Matrix for SNR > 5 dB ---
+        snr_above_5_indices = np.where(X_test[:, :, 2].mean(axis=1) > 5)
+        X_test_snr_above_5 = X_test[snr_above_5_indices]
+        y_test_snr_above_5 = y_test[snr_above_5_indices]
+
+        if len(X_test_snr_above_5) > 0:
+            y_pred_snr_above_5 = np.argmax(model.predict(X_test_snr_above_5, verbose=False), axis=1)
+            conf_matrix_snr_above_5 = confusion_matrix(y_test_snr_above_5, y_pred_snr_above_5)
+            accuracy_over_5dB = accuracy_score(y_test_snr_above_5, y_pred_snr_above_5) * 100
+        else:
+            conf_matrix_snr_above_5 = None
+            accuracy_over_5dB = None
+
+        # --- Accuracy vs. SNR ---
+        unique_snrs = sorted(set(X_test[:, :, 2].mean(axis=1)))
+        accuracy_per_snr = []
+        for snr in unique_snrs:
+            snr_indices = np.where(X_test[:, :, 2].mean(axis=1) == snr)
+            X_snr = X_test[snr_indices]
+            y_snr = y_test[snr_indices]
+            if len(y_snr) > 0:
+                y_pred_snr = np.argmax(model.predict(X_snr, verbose=0), axis=1)
+                accuracy_per_snr.append(accuracy_score(y_snr, y_pred_snr) * 100)
+            else:
+                accuracy_per_snr.append(np.nan)
+
+        peak_accuracy = max([acc for acc in accuracy_per_snr if not np.isnan(acc)])
+        peak_snr = unique_snrs[accuracy_per_snr.index(peak_accuracy)]
+
+        # --- Accuracy vs. SNR per Modulation Type ---
+        unique_modulations = label_encoder.classes_
+        modulation_traces = []
+        for mod_index, mod in enumerate(unique_modulations):
+            accuracies = []
+            for snr in unique_snrs:
+                mod_snr_indices = np.where(
+                    (y_test == mod_index) & (X_test[:, :, 2].mean(axis=1) == snr)
+                )
+                X_mod_snr = X_test[mod_snr_indices]
+                y_mod_snr = y_test[mod_snr_indices]
+                if len(y_mod_snr) > 0:
+                    y_pred_mod_snr = np.argmax(model.predict(X_mod_snr, verbose=False), axis=1)
+                    accuracies.append(accuracy_score(y_mod_snr, y_pred_mod_snr) * 100)
+                else:
+                    accuracies.append(np.nan)
+            modulation_traces.append((mod, accuracies))
+
+        # --- Create Subplots ---
+        fig, axes = plt.subplots(2, 2, figsize=(16, 12))
+
+        # Plot Confusion Matrix for All SNR Levels
+        sns.heatmap(conf_matrix, annot=True, fmt="d", cmap="Blues", 
+                    xticklabels=label_encoder.classes_, yticklabels=label_encoder.classes_, ax=axes[0, 0])
+        axes[0, 0].set_title("Confusion Matrix (All SNR Levels)")
+        axes[0, 0].set_xlabel("Predicted Label")
+        axes[0, 0].set_ylabel("True Label")
+
+        # Plot Confusion Matrix for SNR > 5 dB
+        if conf_matrix_snr_above_5 is not None:
+            sns.heatmap(conf_matrix_snr_above_5, annot=True, fmt="d", cmap="Blues", 
+                        xticklabels=label_encoder.classes_, yticklabels=label_encoder.classes_, ax=axes[0, 1])
+            axes[0, 1].set_title("Confusion Matrix (SNR > 5 dB)")
+            axes[0, 1].set_xlabel("Predicted Label")
+            axes[0, 1].set_ylabel("True Label")
+        else:
+            axes[0, 1].text(0.5, 0.5, "No Samples with SNR > 5 dB", 
+                            ha='center', va='center', fontsize=12)
+            axes[0, 1].set_title("Confusion Matrix (SNR > 5 dB)")
+
+        # Plot Accuracy vs. SNR
+        axes[1, 0].plot(unique_snrs, accuracy_per_snr, 'b-o', label='Recognition Accuracy')
+        axes[1, 0].plot(peak_snr, peak_accuracy, 'ro')  # Mark peak accuracy
+        axes[1, 0].text(peak_snr, peak_accuracy + 1, f"{peak_accuracy:.2f}%", 
+                        ha='center', va='bottom', fontsize=10, 
+                        bbox=dict(facecolor='white', edgecolor='black', boxstyle='round,pad=0.3'))
+        axes[1, 0].set_title("Recognition Accuracy vs. SNR")
+        axes[1, 0].set_xlabel("SNR (dB)")
+        axes[1, 0].set_ylabel("Accuracy (%)")
+        axes[1, 0].grid(True)
+
+        # Plot Accuracy vs. SNR per Modulation Type
+        for mod, accuracies in modulation_traces:
+            axes[1, 1].plot(unique_snrs, accuracies, '-o', label=mod)
+        axes[1, 1].set_title("Accuracy vs. SNR per Modulation Type")
+        axes[1, 1].set_xlabel("SNR (dB)")
+        axes[1, 1].set_ylabel("Accuracy (%)")
+        axes[1, 1].legend(loc='upper left', fontsize=8)
+        axes[1, 1].grid(True)
+
+        # Adjust layout
+        plt.tight_layout()
+
+        # Save the figure
+        output_file = os.path.join(common_vars.stats_dir, f"{self.get_model_name()}_analysis.png")
+        plt.savefig(output_file, dpi=300)
+        print(f"Figure saved to {output_file}")
+
+        if show_plot:
+            plt.show()
+
+        # Return statistics
+        return {
+            "overall_accuracy": overall_accuracy,
+            "accuracy_over_5dB": accuracy_over_5dB,
+            "accuracy_per_snr": dict(zip(unique_snrs, accuracy_per_snr)),
+            "peak_accuracy": peak_accuracy,
+            "peak_snr": peak_snr,
+        }

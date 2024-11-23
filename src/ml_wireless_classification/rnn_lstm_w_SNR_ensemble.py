@@ -40,7 +40,7 @@ from ml_wireless_classification.base.BaseModulationClassifier import (
 )
 from ml_wireless_classification.base.CustomEarlyStopping import CustomEarlyStopping
 
-from ml_wireless_classification.base.CommonVars import common_vars
+from ml_wireless_classification.base.CommonVars import common_vars, RUN_MODE
 from ml_wireless_classification.base.TestingUtils import convert_and_clean_data
 from tensorflow.keras.callbacks import (
     ReduceLROnPlateau,
@@ -48,22 +48,17 @@ from tensorflow.keras.callbacks import (
     LearningRateScheduler,
 )
 class ModulationLSTMClassifier(BaseModulationClassifier):
-    def __init__(self, data_path, model_path="saved_model.h5", stats_path="model_stats.json", model_name = "rnn_lstm_w_SNR_ensemble"):
+    def __init__(self, data_path, model_path="saved_model.h5", 
+                 stats_path="model_stats.json",
+                 model_name = "rnn_lstm_w_SNR_5_2_1_ensemble"):
         super().__init__(data_path, model_path, stats_path)
         self.learning_rate = 0.0001
         self.name = "rnn_lstm_w_SNR"
         script_dir = os.path.dirname(os.path.abspath(__file__))
         self.data_path = os.path.join(script_dir, "..", "..", "RML2016.10a_dict.pkl")
-        self.model_name = "rnn_lstm_w_SNR_5_2_1"
-        self.pretrained_model_path = os.path.join(script_dir, "models", f"{self.model_name}.keras")
-        self.ensemble_model_path = os.path.join(script_dir, "models", f"{self.model_name}_ensemble.keras")
         
         self.model_name = model_name
         self.model_path = os.path.join(script_dir, "models", f"{self.model_name}.keras")
-            
-
-        if not os.path.exists(self.pretrained_model_path):
-            raise FileNotFoundError(f"Pre-trained model not found at {self.pretrained_model_path}")
 
     def am_dsb_demod(self, iq_signal):
         analytic_signal = hilbert(iq_signal)
@@ -157,12 +152,18 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
 
         return test_acc
 
-
     def build_model(self, input_shape, num_classes):
         if os.path.exists(self.model_path):
             print(f"Loading existing model from {self.model_path}")
             self.model = load_model(self.model_path)
         else:
+            pretrained_model_name = "rnn_lstm_w_SNR_5_2_1"
+            self.pretrained_model_path = os.path.join(script_dir, "models", f"{pretrained_model_name}.keras")
+            self.ensemble_model_path = os.path.join(script_dir, "models", f"{pretrained_model_name}_ensemble.keras")
+            
+            if not os.path.exists(self.pretrained_model_path):
+                raise FileNotFoundError(f"Pre-trained model not found at {self.pretrained_model_path}")
+            
             # Load and freeze the pre-trained model
             print(f"Loading pre-trained model from {self.pretrained_model_path}")
             pretrained_model = load_model(self.pretrained_model_path)
@@ -195,8 +196,8 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
             )
 
     def save_model(self):
-        print(f"Saving ensemble model to {self.ensemble_model_path}")
-        self.model.save(self.ensemble_model_path)
+        print(f"Saving ensemble model to {self.model_path}")
+        self.model.save(self.model_path)
 
     def setup(self):
         self.load_data()
@@ -217,13 +218,12 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
         # Return the structured data for training and testing
         return (X_train, X_combined_train, y_train), (X_test, X_combined_test, y_test)
 
-    def main(self, train=True, train_continuously = True):
+    def main(self, mode : RUN_MODE):
         train_data, test_data = self.setup()
         X_train, X_combined_train, y_train = train_data
         X_test, X_combined_test, y_test = test_data
-        
 
-        if train_continuously:
+        if mode == RUN_MODE.TRAIN_CONTINUOUSLY:
             self.train_continuously(
                 [X_train, X_combined_train],
                 y_train,
@@ -233,7 +233,7 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
                 use_clr=True,
                 clr_step_size=10,
             )
-        elif train:
+        elif mode == RUN_MODE.TRAIN:
             self.train(
                 [X_train, X_combined_train],
                 y_train,
@@ -243,6 +243,8 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
                 use_clr=True,
                 clr_step_size=10,
             )
+        elif mode == RUN_MODE.EVALUATE_ONLY:
+            print("Evaluating only...")
             
         self.evaluate([X_test, X_combined_test], y_test)
         predictions = self.predict([X_test, X_combined_test])
@@ -251,8 +253,6 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
         
         stats_dict = self.plot_all_analysis(X_test, X_combined_test, y_test, self.label_encoder, model_name, False)
         self.update_and_save_stats(stats_dict)
-        
-        self.save_model()
 
     def train_continuously(
         self,
@@ -543,6 +543,5 @@ if __name__ == "__main__":
     print("Stats path:", stats_path)
 
     # Initialize the classifier
-    classifier = ModulationLSTMClassifier(data_path, model_path, stats_path, model_name=model_name)
-    classifier.main(train=False,
-                    train_continuously=False)
+    classifier = ModulationLSTMClassifier(data_path, model_path, stats_path)
+    classifier.main(mode=RUN_MODE.EVALUATE_ONLY)

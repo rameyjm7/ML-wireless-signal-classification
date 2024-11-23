@@ -1,21 +1,13 @@
 import os
-import ctypes
-import json
 from datetime import datetime
-import pickle
 import numpy as np
 import tensorflow as tf
-from tensorflow.keras.optimizers import Adam, SGD
+from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.models import Sequential, load_model, clone_model
 from tensorflow.keras.layers import LSTM, Dense, Dropout, Bidirectional
 from tensorflow.keras.layers import (
-    Conv2D,
-    MaxPooling2D,
-    Flatten,
     Dense,
     Dropout,
-    BatchNormalization,
-    Input,
 )
 from tensorflow.keras.models import Sequential
 from sklearn.model_selection import train_test_split
@@ -24,22 +16,7 @@ from ml_wireless_classification.base.BaseModulationClassifier import (
     BaseModulationClassifier,
 )
 
-from tensorflow.keras.callbacks import (
-    ReduceLROnPlateau,
-    EarlyStopping,
-    LearningRateScheduler,
-)
-from ml_wireless_classification.base.CustomEarlyStopping import CustomEarlyStopping
-
-from ml_wireless_classification.base.CommonVars import common_vars
-from ml_wireless_classification.base.SignalUtils import (
-    augment_data_progressive,
-    cyclical_lr,
-)
-
-from tensorflow.keras.layers import Add, Conv2D, Activation
-from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Input
+from ml_wireless_classification.base.CommonVars import common_vars, RUN_MODE
 
 
 class ModulationLSTMClassifier(BaseModulationClassifier):
@@ -429,7 +406,7 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
 
 if __name__ == "__main__":
     # set the model name
-    model_name = "rnn_lstm_w_SNR2"
+    model_name = "rnn_lstm_w_SNR_5_2_1"
     # Get the directory of the current script
     script_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -449,4 +426,4 @@ if __name__ == "__main__":
 
     # Initialize the classifier
     classifier = ModulationLSTMClassifier(data_path, model_path, stats_path)
-    classifier.main()
+    classifier.main(mode=RUN_MODE.EVALUATE_ONLY)
