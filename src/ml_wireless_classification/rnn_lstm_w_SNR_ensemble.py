@@ -211,6 +211,10 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
         predictions = self.predict([X_test, X_combined_test])
         print("Predicted Labels: ", predictions[:5])
         print("True Labels: ", self.label_encoder.inverse_transform(y_test[:5]))
+        
+        stats_dict = self.plot_all_analysis(X_test, X_combined_test, y_test, self.label_encoder, model_name, True)
+        self.update_and_save_stats(stats_dict)
+        
         self.save_model()
 
     def train_continuously(
@@ -263,21 +267,32 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
         use_clr=True,
         clr_step_size=10,
     ):
-        # early_stopping_custom = CustomEarlyStopping(
-        #     monitor="val_accuracy",
-        #     min_delta=0.001,
-        #     patience=5,
-        #     restore_best_weights=True,
-        # )
-        # callbacks = [early_stopping_custom]
+        """
+        Trains the model and updates statistics.
+
+        Parameters:
+        - X_train: Tuple containing inputs for both branches of the model during training.
+        - y_train: Training labels.
+        - X_test: Tuple containing inputs for both branches of the model during validation.
+        - y_test: Validation labels.
+        - epochs (int): Number of epochs for training.
+        - batch_size (int): Batch size for training.
+        - use_clr (bool): Whether to use Cyclical Learning Rate (CLR) scheduler.
+        - clr_step_size (int): Step size for CLR scheduler.
+
+        Returns:
+        - history: Training history object from Keras.
+        """
         callbacks = []
 
+        # Set up Cyclical Learning Rate scheduler if enabled
         if use_clr:
             clr_scheduler = LearningRateScheduler(
                 lambda epoch: self.cyclical_lr(epoch, step_size=clr_step_size)
             )
             callbacks.append(clr_scheduler)
 
+        # Train the model
         history = self.model.fit(
             [X_train[0], X_train[1]],  # First branch: pre-trained input, second branch: combined features
             y_train,
@@ -287,43 +302,91 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
             callbacks=callbacks,
             class_weight=self.class_weights_dict,
         )
-        
-        self.update_epoch_stats(epochs)
+
+        # Get current and best validation accuracies
         current_accuracy = max(history.history["val_accuracy"])
-        self.update_and_save_stats(current_accuracy)
+        best_accuracy = self.stats.get("best_accuracy", 0)
+
+        # Update the stats dictionary
+        new_stats = {
+            "current_accuracy": current_accuracy,
+            "best_accuracy": max(current_accuracy, best_accuracy),
+            "epochs_ran": self.stats.get("epochs_ran", 0) + epochs,
+            "last_run_epochs": epochs,
+        }
+
+        # Update stats and save the model if needed
+        self.update_and_save_stats(new_stats)
 
         return history
+
     
+    def update_and_save_stats(self, new_stats: dict):
+        """
+        Updates stats with the provided new data and saves the model if accuracy improves.
+
+        Parameters:
+        - new_stats (dict): A dictionary containing the new statistics to be updated.
+
+        Expected keys in new_stats:
+        - "current_accuracy" (float): The latest accuracy.
+        - "best_accuracy" (float, optional): The best accuracy recorded so far.
+        """
+
+        # Update the stats dictionary with new data
+        for key, value in new_stats.items():
+            self.stats[key] = value
+
+        current_accuracy = self.stats.get("current_accuracy", 0)
+        best_accuracy = self.stats.get("best_accuracy", 0)
+
+        # Check if the current accuracy is better than the best accuracy
+        if current_accuracy > best_accuracy:
+            print(f"New best accuracy: {current_accuracy:.2f}. Saving model...")
+            self.stats["best_accuracy"] = current_accuracy
+            self.save_model()
+        else:
+            print(
+                f"Current accuracy {current_accuracy:.2f} did not improve from best accuracy {best_accuracy:.2f}. Skipping model save."
+            )
+
+        # Save the updated stats
+        self.save_stats()
+
+ 
     
-    def plot_all_analysis(self, X_test, X_combined_test, y_test, label_encoder, model_name, show_plot = False):
+    def plot_all_analysis(self, X_test, X_combined_test, y_test, label_encoder, model_name, show_plot=False):
         """
         Combines all analysis and visualization into a single function.
         Organizes the plots in a single figure with a dynamic grid layout.
         Saves the figure to the specified directory with the model name as the file name.
+        Returns a dictionary of statistics such as accuracy over 5 dB and accuracy per SNR.
         """
-        
         # Get the directory of the current script
         script_dir = os.path.dirname(os.path.abspath(__file__))
         common_vars.stats_dir = os.path.join(script_dir, "stats")
-        
+
         model = self.model
         # --- Confusion Matrix for All SNR Levels ---
         y_pred = np.argmax(model.predict([X_test, X_combined_test], verbose=False), axis=1)
         conf_matrix = confusion_matrix(y_test, y_pred)
+        overall_accuracy = accuracy_score(y_test, y_pred) * 100
 
         # --- Confusion Matrix for SNR > 5 dB ---
         snr_above_5_indices = np.where(X_test[:, :, 2].mean(axis=1) > 5)
         X_test_snr_above_5 = X_test[snr_above_5_indices]
         X_combined_test_snr_above_5 = X_combined_test[snr_above_5_indices]
         y_test_snr_above_5 = y_test[snr_above_5_indices]
-        
+
         if len(X_test_snr_above_5) > 0:
             y_pred_snr_above_5 = np.argmax(
                 model.predict([X_test_snr_above_5, X_combined_test_snr_above_5], verbose=False), axis=1
             )
             conf_matrix_snr_above_5 = confusion_matrix(y_test_snr_above_5, y_pred_snr_above_5)
+            accuracy_over_5dB = accuracy_score(y_test_snr_above_5, y_pred_snr_above_5) * 100
         else:
             conf_matrix_snr_above_5 = None
+            accuracy_over_5dB = None
 
         # --- Accuracy vs. SNR ---
         unique_snrs = sorted(set(X_test[:, :, 2].mean(axis=1)))
@@ -363,7 +426,7 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
 
         # --- Create Subplots ---
         fig, axes = plt.subplots(2, 2, figsize=(16, 12))
-        
+
         # Plot Confusion Matrix for All SNR Levels
         sns.heatmap(conf_matrix, annot=True, fmt="d", cmap="Blues", 
                     xticklabels=label_encoder.classes_, yticklabels=label_encoder.classes_, ax=axes[0, 0])
@@ -411,8 +474,18 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
         plt.savefig(output_file, dpi=300)
         print(f"Figure saved to {output_file}")
 
-        if show_plot: 
+        if show_plot:
             plt.show()
+
+        # Return statistics
+        return {
+            "overall_accuracy": overall_accuracy,
+            "accuracy_over_5dB": accuracy_over_5dB,
+            "accuracy_per_snr": dict(zip(unique_snrs, accuracy_per_snr)),
+            "peak_accuracy": peak_accuracy,
+            "peak_snr": peak_snr,
+        }
+
         
 
 if __name__ == "__main__":
@@ -437,5 +510,5 @@ if __name__ == "__main__":
 
     # Initialize the classifier
     classifier = ModulationLSTMClassifier(data_path, model_path, stats_path)
-    classifier.main(train=True,
-                    train_continuously=True)
+    classifier.main(train=False,
+                    train_continuously=False)
