@@ -31,10 +31,9 @@ Ensure the following dependencies are installed on your system:
 
 ## Setup and Usage
 
-1. Place your code in `code.zip` in the repository root.
-2. Build the Docker image:
+1. Build the Docker image:
 
    ```make build```
-3. Train the top model
+2. Train the top model
 
    ```make train```
