@@ -17,6 +17,13 @@ Its a python module with different machine learning models, statistics, and gene
 
 # To install the module and run the code:
 
+**Option 1: Using Docker**
+
+You can just browse to the docker folder and view the README.md there for instructions
+
+
+**Option 2: Running it directly**
+
 // Install python3 virtual env
 
 apt install python3-venv
