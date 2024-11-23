@@ -48,7 +48,7 @@ from tensorflow.keras.callbacks import (
     LearningRateScheduler,
 )
 class ModulationLSTMClassifier(BaseModulationClassifier):
-    def __init__(self, data_path, model_path="saved_model.h5", stats_path="model_stats.json"):
+    def __init__(self, data_path, model_path="saved_model.h5", stats_path="model_stats.json", model_name = "rnn_lstm_w_SNR_ensemble"):
         super().__init__(data_path, model_path, stats_path)
         self.learning_rate = 0.0001
         self.name = "rnn_lstm_w_SNR"
@@ -57,6 +57,10 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
         self.model_name = "rnn_lstm_w_SNR_5_2_1"
         self.pretrained_model_path = os.path.join(script_dir, "models", f"{self.model_name}.keras")
         self.ensemble_model_path = os.path.join(script_dir, "models", f"{self.model_name}_ensemble.keras")
+        
+        self.model_name = model_name
+        self.model_path = os.path.join(script_dir, "models", f"{self.model_name}.keras")
+            
 
         if not os.path.exists(self.pretrained_model_path):
             raise FileNotFoundError(f"Pre-trained model not found at {self.pretrained_model_path}")
@@ -124,38 +128,71 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
             (X_existing_test, X_combined_test, y_test),
         )
 
+    def evaluate(self, X_test, y_test):
+        # Unpack the inputs for the two branches
+        X_existing_test, X_combined_test = X_test
+
+        # Evaluate overall test accuracy
+        test_loss, test_acc = self.model.evaluate([X_existing_test, X_combined_test], y_test)
+        print(f"Test Accuracy: {test_acc * 100:.2f}%")
+        
+        # Generate predictions
+        y_pred = self.model.predict([X_existing_test, X_combined_test])
+        y_pred_classes = np.argmax(y_pred, axis=1)
+
+        # Save confusion matrix
+        self.save_confusion_matrix(y_test, y_pred_classes)
+        
+        # Calculate and print accuracy per class
+        conf_matrix = confusion_matrix(y_test, y_pred_classes)
+        class_accuracies = conf_matrix.diagonal() / conf_matrix.sum(axis=1)
+        
+        print("\nPer-Class Accuracy:")
+        for idx, accuracy in enumerate(class_accuracies):
+            print(f"Class {self.label_encoder.inverse_transform([idx])[0]}: {accuracy * 100:.2f}%")
+        
+        # Optional: Print detailed classification report (includes precision, recall, f1-score)
+        print("\nClassification Report:")
+        print(classification_report(y_test, y_pred_classes, target_names=self.label_encoder.classes_))
+
+        return test_acc
+
 
     def build_model(self, input_shape, num_classes):
-        # Load and freeze the pre-trained model
-        print(f"Loading pre-trained model from {self.pretrained_model_path}")
-        pretrained_model = load_model(self.pretrained_model_path)
-        pretrained_model.trainable = False
+        if os.path.exists(self.model_path):
+            print(f"Loading existing model from {self.model_path}")
+            self.model = load_model(self.model_path)
+        else:
+            # Load and freeze the pre-trained model
+            print(f"Loading pre-trained model from {self.pretrained_model_path}")
+            pretrained_model = load_model(self.pretrained_model_path)
+            pretrained_model.trainable = False
 
-        # First branch: Pre-trained model
-        existing_model_output = pretrained_model.output  # Shape: (batch_size, timesteps, features)
-        existing_input = pretrained_model.input
+            # First branch: Pre-trained model
+            existing_model_output = pretrained_model.output  # Shape: (batch_size, timesteps, features)
+            existing_input = pretrained_model.input
 
-        # Second branch: AM-DSB, WBFM, and SNR features
-        combined_branch_input = Input(shape=(128, 3), name="combined_branch_input")  # Shape: (batch_size, 128, 3)
-        lstm_features = Bidirectional(LSTM(128, return_sequences=False, name="lstm_combined_features"))(combined_branch_input)
-        dense_features = Dense(128, activation="relu", name="dense_combined_features")(lstm_features)
+            # Second branch: AM-DSB, WBFM, and SNR features
+            combined_branch_input = Input(shape=(128, 3), name="combined_branch_input")  # Shape: (batch_size, 128, 3)
+            lstm_features = Bidirectional(LSTM(128, return_sequences=False, name="lstm_combined_features"))(combined_branch_input)
+            dense_features = Dense(128, activation="relu", name="dense_combined_features")(lstm_features)
 
-        # Combine both branches
-        combined = Concatenate(name="combine_existing_new_features")([existing_model_output, dense_features])
-        x = Dense(128, activation="relu", name="dense_combined")(combined)
-        x = Dropout(0.1, name="dropout_combined")(x)
-        output = Dense(num_classes, activation="softmax", name="final_output")(x)
+            # Combine both branches
+            combined = Concatenate(name="combine_existing_new_features")([existing_model_output, dense_features])
+            x = Dense(128, activation="relu", name="dense_combined")(combined)
+            x = Dropout(0.1, name="dropout_combined")(x)
+            output = Dense(num_classes, activation="softmax", name="final_output")(x)
 
-        # Define the ensemble model
-        self.model = Model(inputs=[existing_input, combined_branch_input], outputs=output)
+            # Define the ensemble model
+            self.model = Model(inputs=[existing_input, combined_branch_input], outputs=output)
 
-        # Compile the model
-        optimizer = Adam(learning_rate=self.learning_rate)
-        self.model.compile(
-            loss="sparse_categorical_crossentropy",
-            optimizer=optimizer,
-            metrics=["accuracy"],
-        )
+            # Compile the model
+            optimizer = Adam(learning_rate=self.learning_rate)
+            self.model.compile(
+                loss="sparse_categorical_crossentropy",
+                optimizer=optimizer,
+                metrics=["accuracy"],
+            )
 
     def save_model(self):
         print(f"Saving ensemble model to {self.ensemble_model_path}")
@@ -168,7 +205,7 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
         # Unpack training and testing data
         X_train, X_combined_train, y_train = train_data
         X_test, X_combined_test, y_test = test_data
-
+        
         # Apply class weighting for imbalanced datasets
         self.apply_class_weighting(y_train)
 
@@ -212,7 +249,7 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
         print("Predicted Labels: ", predictions[:5])
         print("True Labels: ", self.label_encoder.inverse_transform(y_test[:5]))
         
-        stats_dict = self.plot_all_analysis(X_test, X_combined_test, y_test, self.label_encoder, model_name, True)
+        stats_dict = self.plot_all_analysis(X_test, X_combined_test, y_test, self.label_encoder, model_name, False)
         self.update_and_save_stats(stats_dict)
         
         self.save_model()
@@ -320,7 +357,6 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
 
         return history
 
-    
     def update_and_save_stats(self, new_stats: dict):
         """
         Updates stats with the provided new data and saves the model if accuracy improves.
@@ -352,8 +388,6 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
 
         # Save the updated stats
         self.save_stats()
-
- 
     
     def plot_all_analysis(self, X_test, X_combined_test, y_test, label_encoder, model_name, show_plot=False):
         """
@@ -490,7 +524,7 @@ class ModulationLSTMClassifier(BaseModulationClassifier):
 
 if __name__ == "__main__":
     # set the model name
-    model_name = "rnn_lstm_w_SNR_ensemble"
+    model_name = "rnn_lstm_w_SNR_5_2_1_ensemble"
     # Get the directory of the current script
     script_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -509,6 +543,6 @@ if __name__ == "__main__":
     print("Stats path:", stats_path)
 
     # Initialize the classifier
-    classifier = ModulationLSTMClassifier(data_path, model_path, stats_path)
+    classifier = ModulationLSTMClassifier(data_path, model_path, stats_path, model_name=model_name)
     classifier.main(train=False,
                     train_continuously=False)
