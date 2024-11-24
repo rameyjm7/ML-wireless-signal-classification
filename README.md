@@ -134,8 +134,6 @@ In general, the most confusion was between WBFM and AM-DSB, and then followed by
 
 # Model Statistics Summary
 
-# Model Statistics Summary
-
 This table summarizes statistics for all models found, sorted by best accuracy.
 
 | Model Name                                          | Date Created        |   Epochs Trained |   Best Accuracy |   Current Accuracy | Last Trained        |
