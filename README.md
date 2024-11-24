@@ -19,7 +19,7 @@ Its a python module with different machine learning models, statistics, and gene
 
 **Option 1: Using Docker**
 
-You can just browse to the docker folder and view the README.md there for instructions
+You can just browse to the docker folder and view the [README.md](https://github.com/rameyjm7/ML-wireless-signal-classification/blob/main/docker/README.md) there for instructions
 
 
 **Option 2: Running it directly**
