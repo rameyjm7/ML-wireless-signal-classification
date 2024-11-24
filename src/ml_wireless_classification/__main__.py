@@ -1,7 +1,7 @@
 import faulthandler
 import os
 import numpy as np
-from ml_wireless_classification.base.CommonVars import common_vars
+from ml_wireless_classification.base.CommonVars import common_vars, RUN_MODE
 from ml_wireless_classification.rnn_lstm_w_SNR import ModulationLSTMClassifier
 
 # Enable fault handler for better debugging
@@ -15,7 +15,7 @@ def is_docker_environment():
 
 if __name__ == "__main__":
     # Set the model name
-    model_name = "rnn_lstm_w_SNR_5_2_1"
+    model_name = "rnn_lstm_w_SNR"
 
     # Determine base directory
     if is_docker_environment():
@@ -24,7 +24,7 @@ if __name__ == "__main__":
         base_dir = os.path.dirname(os.path.abspath(__file__))
 
     # Define paths
-    data_path = os.path.join(base_dir, "RML2016.10a_dict.pkl")
+    data_path = os.path.join(base_dir, "..", "..", "RML2016.10a_dict.pkl")
     common_vars.stats_dir = os.path.join(base_dir, "stats")
     common_vars.models_dir = os.path.join(base_dir, "models")
     model_path = os.path.join(base_dir, "models", f"{model_name}.keras")
@@ -35,6 +35,7 @@ if __name__ == "__main__":
     print("Model path:", model_path)
     print("Stats path:", stats_path)
 
+    mode = RUN_MODE.EVALUATE_ONLY
     # Initialize the classifier
     classifier = ModulationLSTMClassifier(data_path, model_path, stats_path)
-    classifier.main()
+    classifier.main(mode)
