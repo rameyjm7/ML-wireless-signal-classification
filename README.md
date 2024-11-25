@@ -155,7 +155,8 @@ This table summarizes statistics for all models found, sorted by best accuracy.
 I am working on a classifier for WBFM versus Others and may implement an ensemble model to achieve superior accuracy
 
 
-# Troubleshooting
+# Troubleshooting if running on NVIDIA Jetson Xavier
+
 If you see this error message:
 ImportError: /home/dev/python/lib/python3.8/site-packages/sklearn/__check_build/../../scikit_learn.libs/libgomp-d22c30c5.so.1.0.0: cannot allocate memory in static TLS block
 
