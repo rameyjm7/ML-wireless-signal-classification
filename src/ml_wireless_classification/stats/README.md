@@ -4,8 +4,6 @@ This table summarizes statistics for all models found, sorted by best accuracy.
 
 | Model Name                                          | Date Created        |   Epochs Trained |   Best Accuracy |   Current Accuracy | Last Trained        |
 |:----------------------------------------------------|:--------------------|-----------------:|----------------:|-------------------:|:--------------------|
-| rnn_lstm_w_SNR_5_2_1_ensemble_stats                 | 2024-11-23 14:12:01 |                0 |       92.8841   |           0        |                     |
-| WBFM_OvR_stats                                      | 2024-11-06 11:04:12 |              160 |        0.909386 |           0.902182 | 2024-11-06 11:40:44 |
 | rnn_lstm_w_SNR_stats                                | 2024-10-24 14:33:20 |             2215 |        0.678091 |           0.670545 | 2024-11-07 12:20:06 |
 | rnn_lstm_w_SNR_5_2_1_stats                          | 2024-10-26 22:03:21 |            13960 |        0.677909 |           0.677455 | 2024-11-01 10:21:04 |
 | EnhancedModulationClassifier_KitchenSink_v2_stats   | 2024-11-05 13:18:16 |              920 |        0.554318 |           0.554205 | 2024-11-06 11:53:17 |
