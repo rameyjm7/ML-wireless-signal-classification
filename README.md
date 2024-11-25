@@ -75,7 +75,8 @@ https://github.com/rameyjm7/ML-wireless-signal-classification/blob/main/tests/rn
 
 Using RNN_LSTM_5_2_1.keras
 
-![image](https://github.com/user-attachments/assets/acfb0182-4c9f-4110-9f43-f935468e2748)
+![image](https://github.com/user-attachments/assets/6eebbb20-105d-4c9c-ba17-7f2ec11e070f)
+
 Classification Report for Modulation Types:
               precision    recall  f1-score   support
 
@@ -94,8 +95,6 @@ Classification Report for Modulation Types:
     accuracy                           0.68     44000
    macro avg       0.70      0.68      0.68     44000
 weighted avg       0.70      0.68      0.68     44000
-
-![image](https://github.com/user-attachments/assets/33b350a3-694c-4a8a-a780-341679a35cfd)
 
 Classification Report for Modulation Types (SNR > 5 dB):
               precision    recall  f1-score   support
@@ -116,11 +115,7 @@ Classification Report for Modulation Types (SNR > 5 dB):
    macro avg       0.95      0.94      0.93     15332
 weighted avg       0.95      0.94      0.93     15332
 
-![image](https://github.com/user-attachments/assets/a8cab6f8-f43a-4115-9ef6-40db99f9be32)
-![image](https://github.com/user-attachments/assets/8cc08dcc-420f-47cc-aa01-055a3f3d63eb)
-
-
-Using Random Foresting and many features I was able to achieve 90% accuracy with minimal training (~15 seconds)
+Using **Random Foresting** and many features I was able to achieve 90% accuracy with minimal training (~15 seconds)
 
 ![image](https://github.com/user-attachments/assets/b2a0f6de-1090-42c5-800b-b56288c22324)
 ![image](https://github.com/user-attachments/assets/06309dc4-e6c4-4356-87d8-fead459fe1e0)
