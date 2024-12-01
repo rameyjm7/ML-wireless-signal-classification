@@ -166,9 +166,7 @@ this way the library is loaded before python loads scikit-learn
 
 # References
 
-https://github.com/radioML
-
-https://github.com/BolognaBiocomp/deepsig
+Bai, H., Huang, M., & Yang, J. (2023, October 1). An efficient Automatic Modulation Classification method based on the Convolution Adaptive Noise Reduction network. ICT Express, pp. 834-840. Retrieved from https://www.sciencedirect.com/science/article/pii/S2405959522001515
 
 ​​Bhuiya, S. (2020, October 31). Disadvantages of CNN models. Retrieved from Medium: https://sandeep-bhuiya01.medium.com/disadvantages-of-cnn-models-95395fe9ae40 
 
