@@ -1,7 +1,7 @@
 # Purpose
 
-This is a repository to hold the code for our research paper: Wireless Signal Classification via Machine Learning. See our (in progress) paper here
-https://github.com/rameyjm7/ML-wireless-signal-classification/blob/main/Wireless%20Signal%20Classification%20via%20Machine%20Learning.pdf
+This is a repository to hold the code for our research paper: Wireless Signal Classification via Machine Learning. See our paper here
+https://github.com/rameyjm7/ML-wireless-signal-classification/blob/main/Wireless%20Signal%20Classification%20via%20Machine%20Learning%20-%20Final.pdf
 
 We want to classify a signal as 1 of 11 modulation types using a machine learning model, such as RNN-LSTM or a Random Forest Classifier
 
