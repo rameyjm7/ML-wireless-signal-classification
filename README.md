@@ -2,6 +2,8 @@
 <div align="center">
   <h1>🚧 Repository Under Construction 🚧</h1>
   <p><em>This project is currently a work in progress. Stay tuned for updates!</em></p>
+  <p>The proposal for the upcoming work is here https://github.com/rameyjm7/ML-wireless-signal-classification/blob/main/Wireless%20Signal%20Classification%20via%20Deep%20Learning-Proposal.pdf</p>
+  
 </div>
 
 
