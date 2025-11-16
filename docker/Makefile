@@ -13,8 +13,19 @@ GITHASH := $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
 .PHONY: build push asif shell run clean
 
 build:
-	@echo ">>> Building tarball for source code..."
-	cd .. && tar -czf docker/code.tar.gz src/ tests/ setup.py RML2016.10a_dict.pkl
+	@echo ">>> Building tarball with full project contents..."
+	cd .. && tar -czf docker/code.tar.gz \
+		src/ \
+		tests/ \
+		models/ \
+		data/ \
+		docs/ \
+		notebooks/ \
+		scratch/ \
+		setup.py \
+		LICENSE \
+		README.md \
+		RML2016.10a_dict.pkl
 	@echo ">>> Building Docker image $(FULL_IMAGE)..."
 	docker build --build-arg GITHASH=$(GITHASH) -t $(FULL_IMAGE) -f docker/Dockerfile docker/
 
@@ -23,9 +34,10 @@ push:
 	docker push $(FULL_IMAGE)
 
 asif:
-	@echo ">>> Converting Docker image to .sif for HPC..."
-	apptainer build $(SIF_NAME) docker-daemon://$(FULL_IMAGE)
-	@echo "Created: $(SIF_NAME)"
+	@echo ">>> Pulling image from DockerHub and converting to .sif for HPC..."
+	module load apptainer || true
+	apptainer build $(SIF_NAME) docker://$(FULL_IMAGE)
+	@echo "Created: $(SIF_NAME) from DockerHub image $(FULL_IMAGE)"
 
 shell:
 	@echo ">>> Launching interactive shell in container..."
@@ -39,4 +51,4 @@ clean:
 	@echo ">>> Cleaning up Docker artifacts..."
 	docker rm -f $(CONTAINER_NAME) 2>/dev/null || true
 	docker rmi $(FULL_IMAGE) 2>/dev/null || true
-	rm -f $(SIF_NAME)
+	rm -f $(SIF_NAME) docker/code.tar.gz 2>/dev/null || true
