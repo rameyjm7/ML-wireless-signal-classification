@@ -9,6 +9,8 @@ FULL_IMAGE = $(DOCKERHUB_USER)/$(NAME):$(IMAGE_TAG)
 CONTAINER_NAME = $(NAME)_container
 SIF_NAME = $(NAME)-hpc.sif
 GITHASH := $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
+TOKEN := mlsc
+PORT := 8888
 
 .PHONY: build push asif shell run clean
 
@@ -46,6 +48,13 @@ shell:
 run:
 	@echo ">>> Running container with JupyterLab..."
 	docker run --rm -it --gpus all -p 8888:8888 -v $(PWD)/..:/workspace $(FULL_IMAGE)
+
+apptainer-lab:
+	@echo "Launching Jupyter Lab inside Apptainer on port $(PORT)"
+	module load apptainer && \
+	apptainer exec --nv $(SIF_NAME) \
+	    jupyter lab --ip=0.0.0.0 --port=$(PORT) \
+	    --no-browser --allow-root --NotebookApp.token=$(TOKEN)
 
 clean:
 	@echo ">>> Cleaning up Docker artifacts..."
