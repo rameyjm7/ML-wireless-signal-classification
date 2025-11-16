@@ -18,7 +18,7 @@ LABEL org.opencontainers.image.description="RNN-LSTM Deep Learning model for wir
 # --------------------------------------------------------------
 RUN apt-get update -y && \
     apt-get install -y --no-install-recommends \
-        python3.10 python3.10-venv python3-pip git wget curl tar \
+        python3.10 python3.10-venv python3-pip git git-lfs wget curl tar \
         build-essential ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
