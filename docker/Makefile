@@ -56,6 +56,12 @@ apptainer-lab:
 	    jupyter lab --ip=0.0.0.0 --port=$(PORT) \
 	    --no-browser --allow-root --NotebookApp.token=$(TOKEN)
 
+shell-hpc:
+	@echo ">>> Opening an interactive shell inside the HPC Apptainer environment..."
+	module load apptainer && \
+	apptainer exec --nv $(SIF_NAME) /bin/bash
+
+
 clean:
 	@echo ">>> Cleaning up Docker artifacts..."
 	docker rm -f $(CONTAINER_NAME) 2>/dev/null || true
