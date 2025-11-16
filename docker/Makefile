@@ -26,10 +26,9 @@ build:
 		scratch/ \
 		setup.py \
 		LICENSE \
-		README.md \
-		RML2016.10a_dict.pkl
+		README.md 
 	@echo ">>> Building Docker image $(FULL_IMAGE)..."
-	docker build --build-arg GITHASH=$(GITHASH) -t $(FULL_IMAGE) -f docker/Dockerfile docker/
+	docker build --build-arg GITHASH=$(GITHASH) -t $(FULL_IMAGE) -f Dockerfile ./
 
 push:
 	@echo ">>> Pushing image to DockerHub: $(FULL_IMAGE)"
