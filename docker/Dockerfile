@@ -48,6 +48,7 @@ RUN mkdir -p /workspace/code && \
     pip install /workspace/code && \
     rm /workspace/code.tar.gz
 
+RUN apt update && apt install -y ssh
 # --------------------------------------------------------------
 # Expose Jupyter port and default command
 # --------------------------------------------------------------
