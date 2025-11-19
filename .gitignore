@@ -10,3 +10,4 @@ src/ml_wireless_classification.egg-info
 src/ml_wireless_classification/__pycache__
 logs/fit/
 code.tar.gz
+*.sif
