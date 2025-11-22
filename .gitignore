@@ -1,3 +1,6 @@
+data/RML2016
+data/RML2018
+data/DeepRadar2022
 RML2016.10a_dict.pkl
 dataset
 *.keras_data.pkl
@@ -7,3 +10,4 @@ src/ml_wireless_classification.egg-info
 src/ml_wireless_classification/__pycache__
 logs/fit/
 code.tar.gz
+*.sif
