@@ -1,14 +1,10 @@
 # Wireless Signal Classification via Deep Learning
-
-**Authors:** Jacob M. Ramey, Paras Goda
-
----
-
-# Badges
 ![Python](https://img.shields.io/badge/Python-3.10-blue)
 ![TensorFlow](https://img.shields.io/badge/TensorFlow-2.x-orange)
 ![CUDA](https://img.shields.io/badge/CUDA-11.8-green)
 ![Docker](https://img.shields.io/badge/Docker-GPU--Ready-blue)
+
+**Authors:** Jacob M. Ramey, Paras Goda
 
 ---
 
