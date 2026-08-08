@@ -321,8 +321,7 @@ See [docker/README.md](docker/README.md) for Docker Hub and Apptainer/HPC usage.
   engines, ONNX exports, private calibration data, raw IQ captures, and
   production deployment artifacts.
 - Use the provided workflows to train/export your own models, or contact Jacob
-  Ramey / RTG LLC to license validated model artifacts and commercial
-  integrations.
+  Ramey to license validated model artifacts and commercial integrations.
 - Public dataset results are not equivalent to live field collection.
 - Release/tag process is documented in `RELEASE.md`.
 
@@ -330,13 +329,13 @@ See [docker/README.md](docker/README.md) for Docker Hub and Apptainer/HPC usage.
 
 RF Signal Intelligence is source-available for personal, educational, research,
 evaluation, and other non-commercial use. All commercial rights are retained by
-Jacob Ramey and RTG LLC. Commercial use, paid deployment, commercial hosting,
+Jacob Ramey. Commercial use, paid deployment, commercial hosting,
 integration into commercial products or services, contract deliverables, managed
 service offerings, or other revenue-generating use requires prior written
 permission.
 
 This repository uses and references third-party datasets, models, SDR drivers,
-tools, and protocol materials. Jacob Ramey and RTG LLC make no ownership claim
+tools, and protocol materials. Jacob Ramey makes no ownership claim
 over those third-party materials, including NoisyDroneRF, RFUAV, DeepSig
 RadioML, RML2016, RML2018, DeepRadar2022, or any other external dataset. Those
 materials remain subject to their original licenses, terms, and redistribution
@@ -345,7 +344,6 @@ restrictions.
 For commercial licensing, integration, support, or permission inquiries, contact:
 
 - Jacob Ramey: rameyjm7@gmail.com
-- RTG LLC: jake.rtgllc@gmail.com
 
 ## Citation
 
