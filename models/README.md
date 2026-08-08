@@ -5,8 +5,8 @@ ONNX exports, checkpoints, generated IQ samples, or calibration captures.
 
 The public repo provides source code, training/evaluation workflows, export
 scripts, model cards, and result summaries. Bring your own trained artifacts,
-train models with the provided workflows, or contact Jacob Ramey / RTG LLC to
-license validated model artifacts and commercial integrations.
+train models with the provided workflows, or contact Jacob Ramey to license
+validated model artifacts and commercial integrations.
 
 ## Layout
 
@@ -48,4 +48,3 @@ python exports/run_onnx_inference.py \
 Commercial licensing, validated model artifacts, and integration support:
 
 - Jacob Ramey: rameyjm7@gmail.com
-- RTG LLC: jake.rtgllc@gmail.com
