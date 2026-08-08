@@ -85,6 +85,13 @@ Full evidence:
 - [NoisyDroneRFv2 result card](docs/results/noisy_drone_rf_v2/README.md)
 - [Jetson TensorRT benchmark/profile summary](results/benchmarks/noisy_drone_tensorrt_jetson.md)
 
+Related public-safe system evidence:
+
+| AirScope wireless assurance | PASSIVE-SHIELD passive sensing |
+|---|---|
+| [![AirScope public dashboard screenshot](https://www.rtgllc.io/assets/airscope-ap-overview.png)](https://rtgspectrum.com/airscope/) | [![PASSIVE-SHIELD public demo map screenshot](https://www.rtgllc.io/assets/passive-shield-ui-map-random.jpg)](https://www.rtgllc.io/mission-systems/passive-shield/) |
+| Multi-band wireless survey evidence, inventory, channel analysis, and reporting workflows. | Public-safe C-UAS prototype evidence for passive RF sensing, corroboration, and operator cues. |
+
 ## Headline Results
 
 | Area | Model / protocol | Result |
